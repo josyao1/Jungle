@@ -269,6 +269,16 @@ export default function PickPage() {
         />
       </div>
 
+      {!isLocked && (
+        <button
+          onClick={handleSubmit}
+          disabled={saving}
+          className="w-full py-3 bg-green-600 hover:bg-green-700 rounded-lg font-medium transition-colors disabled:opacity-50"
+        >
+          {saving ? 'Saving...' : 'Save Picks'}
+        </button>
+      )}
+
       {isLocked && (
         <div className="bg-red-900/50 border border-red-700 rounded-lg p-4">
           <p className="text-red-400">Picks are locked. Game has started!</p>
@@ -362,16 +372,6 @@ export default function PickPage() {
           ))}
         </div>
       </div>
-
-      {!isLocked && (
-        <button
-          onClick={handleSubmit}
-          disabled={saving}
-          className="w-full py-3 bg-green-600 hover:bg-green-700 rounded-lg font-medium transition-colors disabled:opacity-50"
-        >
-          {saving ? 'Saving...' : 'Save Picks'}
-        </button>
-      )}
     </div>
   )
 }
