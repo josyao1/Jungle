@@ -1,4 +1,4 @@
-export const PLAYERS = ['andy', 'andrew', 'josh', 'ronit', 'aarnav', 'pranay'] as const
+export const PLAYERS = ['andy', 'andrew', 'josh', 'ronit', 'aarnav', 'pranav'] as const
 export type Player = typeof PLAYERS[number]
 
 export const STATS = ['pts', '3pm', 'ast', 'stl', 'blk'] as const
