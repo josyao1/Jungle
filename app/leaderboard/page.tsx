@@ -9,8 +9,10 @@ import { supabase } from '@/lib/supabase'
 interface GameScore {
   game_number: number
   correct_picks: number
+  missed_picks: number
   exact_lines: number
   prop_wins: number
+  prop_misses: number
   total_points: number
 }
 
@@ -18,8 +20,10 @@ interface PlayerScores {
   player: string
   totalPoints: number
   totalCorrectPicks: number
+  totalMissedPicks: number
   totalExactLines: number
   totalPropWins: number
+  totalPropMisses: number
   games: GameScore[]
 }
 
@@ -55,8 +59,10 @@ export default function LeaderboardPage() {
         player: p,
         totalPoints: 0,
         totalCorrectPicks: 0,
+        totalMissedPicks: 0,
         totalExactLines: 0,
         totalPropWins: 0,
+        totalPropMisses: 0,
         games: [],
       })
     })
@@ -71,13 +77,17 @@ export default function LeaderboardPage() {
 
         playerData.totalPoints += score.total_points || 0
         playerData.totalCorrectPicks += score.correct_picks || 0
+        playerData.totalMissedPicks += score.missed_picks || 0
         playerData.totalExactLines += score.exact_lines || 0
         playerData.totalPropWins += score.prop_wins || 0
+        playerData.totalPropMisses += score.prop_misses || 0
         playerData.games.push({
           game_number: gameNum,
           correct_picks: score.correct_picks || 0,
+          missed_picks: score.missed_picks || 0,
           exact_lines: score.exact_lines || 0,
           prop_wins: score.prop_wins || 0,
+          prop_misses: score.prop_misses || 0,
           total_points: score.total_points || 0,
         })
       })
@@ -109,7 +119,8 @@ export default function LeaderboardPage() {
             <tr className="bg-gray-700">
               <th className="px-4 py-3 text-left">#</th>
               <th className="px-4 py-3 text-left">Player</th>
-              <th className="px-4 py-3 text-center text-sm">Picks</th>
+              <th className="px-4 py-3 text-center text-sm">Hits</th>
+              <th className="px-4 py-3 text-center text-sm">Misses</th>
               <th className="px-4 py-3 text-center text-sm">Exact</th>
               <th className="px-4 py-3 text-center text-sm">Props</th>
               <th className="px-4 py-3 text-right">Total</th>
@@ -136,14 +147,17 @@ export default function LeaderboardPage() {
                     {entry.player}
                     {i === 0 && ' 👑'}
                   </td>
-                  <td className="px-4 py-3 text-center text-gray-400">
+                  <td className="px-4 py-3 text-center text-green-400">
                     {entry.totalCorrectPicks}
+                  </td>
+                  <td className="px-4 py-3 text-center text-red-400">
+                    {entry.totalMissedPicks + entry.totalPropMisses}
                   </td>
                   <td className="px-4 py-3 text-center text-gray-400">
                     {entry.totalExactLines}
                   </td>
                   <td className="px-4 py-3 text-center text-gray-400">
-                    {entry.totalPropWins}
+                    {entry.totalPropWins}/{entry.totalPropWins + entry.totalPropMisses}
                   </td>
                   <td className="px-4 py-3 text-right font-bold text-green-400">
                     {entry.totalPoints}
@@ -169,7 +183,7 @@ export default function LeaderboardPage() {
                                       {gameScore.total_points} pts
                                     </div>
                                     <div className="text-xs text-gray-500">
-                                      {gameScore.correct_picks} picks / {gameScore.exact_lines} exact / {gameScore.prop_wins} props
+                                      {gameScore.correct_picks}✓ {gameScore.missed_picks + gameScore.prop_misses}✗ / {gameScore.exact_lines} exact / {gameScore.prop_wins} props
                                     </div>
                                   </>
                                 ) : (
@@ -192,10 +206,11 @@ export default function LeaderboardPage() {
       <div className="bg-gray-800 rounded-lg p-4">
         <h2 className="text-lg font-semibold mb-3">Scoring Rules</h2>
         <ul className="text-gray-400 text-sm space-y-1">
-          <li>• +1 point for each correct &quot;over&quot; pick</li>
-          <li>• +1 bonus point for predicting exact stat value</li>
-          <li>• +1 point for each correct prop bet</li>
-          <li>• Prop bets: Most Points, Most 3PM, Coolest Moment</li>
+          <li><span className="text-green-400">+1</span> for each correct over pick</li>
+          <li><span className="text-red-400">-0.5</span> for each missed over pick</li>
+          <li><span className="text-green-400">+1</span> bonus for predicting exact stat value</li>
+          <li><span className="text-green-400">+1</span> for each correct prop bet</li>
+          <li><span className="text-red-400">-0.5</span> for each wrong prop bet</li>
         </ul>
       </div>
     </div>

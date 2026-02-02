@@ -4,17 +4,18 @@ export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback } from 'react'
 import { PLAYERS, STATS, STAT_LABELS, GAMES, getGamePhase, Player, Stat } from '@/lib/constants'
-import { supabase, LinePrediction } from '@/lib/supabase'
+import PlayerSelect from '@/components/PlayerSelect'
+import { supabase } from '@/lib/supabase'
 
 export default function SetLinesPage() {
   const [player, setPlayer] = useState<Player | null>(null)
   const [gameId, setGameId] = useState<string | null>(null)
   const [predictions, setPredictions] = useState<Record<string, Record<string, string>>>({})
   const [submitted, setSubmitted] = useState(false)
-  const [otherPredictions, setOtherPredictions] = useState<LinePrediction[]>([])
-  const [loading, setLoading] = useState(true)
+    const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [phase, setPhase] = useState<string>('lines_open')
+  const [phase, setPhase] = useState<string>('open')
+  const [error, setError] = useState<string | null>(null)
 
   // Initialize predictions with empty values (blank = no prediction)
   useEffect(() => {
@@ -44,18 +45,36 @@ export default function SetLinesPage() {
       return now < gameEnd
     }) || GAMES[GAMES.length - 1]
 
-    setPhase(getGamePhase(currentGame))
+    const currentPhase = getGamePhase(currentGame)
+    setPhase(currentPhase)
 
     // Get game ID from database
-    const { data: games } = await supabase
+    let { data: games } = await supabase
       .from('games')
       .select('id')
       .eq('game_number', currentGame.number)
       .single()
 
+    // If game doesn't exist, create it
     if (!games) {
-      setLoading(false)
-      return
+      const { data: newGame, error: createError } = await supabase
+        .from('games')
+        .insert({
+          game_number: currentGame.number,
+          game_date: currentGame.date.toISOString(),
+          lines_lock_time: currentGame.lockTime.toISOString(),
+          picks_lock_time: currentGame.lockTime.toISOString(),
+          status: 'upcoming'
+        })
+        .select('id')
+        .single()
+
+      if (createError || !newGame) {
+        setError(`Could not find or create game ${currentGame.number}`)
+        setLoading(false)
+        return
+      }
+      games = newGame
     }
     setGameId(games.id)
 
@@ -80,8 +99,6 @@ export default function SetLinesPage() {
           })
         })
         setPredictions(loaded)
-        // Show others' predictions
-        setOtherPredictions(existingPredictions.filter(p => p.submitter !== savedPlayer))
       }
     }
 
@@ -103,8 +120,12 @@ export default function SetLinesPage() {
   }
 
   const handleSubmit = async () => {
-    if (!player || !gameId) return
+    if (!player || !gameId) {
+      setError('Missing player or game ID. Try refreshing.')
+      return
+    }
     setSaving(true)
+    setError(null)
 
     // Build predictions array - only include non-blank values
     const toInsert: Array<{
@@ -131,23 +152,30 @@ export default function SetLinesPage() {
     })
 
     // First delete any existing predictions for this user/game (in case they cleared some)
-    await supabase
+    const { error: deleteError } = await supabase
       .from('line_predictions')
       .delete()
       .eq('game_id', gameId)
       .eq('submitter', player)
 
-    // Then insert the new ones
-    const { error } = toInsert.length > 0
-      ? await supabase.from('line_predictions').insert(toInsert)
-      : { error: null }
-
-    if (!error) {
-      setSubmitted(true)
-      // Reload to show others' predictions
-      loadData()
+    if (deleteError) {
+      setError(`Delete failed: ${deleteError.message}`)
+      setSaving(false)
+      return
     }
 
+    // Then insert the new ones
+    if (toInsert.length > 0) {
+      const { error: insertError } = await supabase.from('line_predictions').insert(toInsert)
+      if (insertError) {
+        setError(`Insert failed: ${insertError.message}`)
+        setSaving(false)
+        return
+      }
+    }
+
+    setSubmitted(true)
+    loadData()
     setSaving(false)
   }
 
@@ -164,14 +192,24 @@ export default function SetLinesPage() {
     )
   }
 
-  const isLocked = phase !== 'lines_open'
+  const isLocked = phase === 'locked'
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Set Lines</h1>
-        <span className="text-gray-400 capitalize">Playing as: {player}</span>
+        <PlayerSelect
+          onSelect={setPlayer}
+          selected={player}
+          compact
+        />
       </div>
+
+      {error && (
+        <div className="bg-red-900/50 border border-red-700 rounded-lg p-4">
+          <p className="text-red-400">{error}</p>
+        </div>
+      )}
 
       {isLocked && (
         <div className="bg-yellow-900/50 border border-yellow-700 rounded-lg p-4">
@@ -248,38 +286,6 @@ export default function SetLinesPage() {
         </div>
       )}
 
-      {submitted && otherPredictions.length > 0 && (
-        <div className="space-y-4">
-          <h2 className="text-xl font-semibold">Others&apos; Predictions</h2>
-          {PLAYERS.filter(p => p !== player).map(submitter => {
-            const theirPredictions = otherPredictions.filter(p => p.submitter === submitter)
-            if (theirPredictions.length === 0) return null
-
-            return (
-              <div key={submitter} className="bg-gray-800 rounded-lg p-4">
-                <h3 className="capitalize font-medium mb-2">{submitter}</h3>
-                <div className="grid grid-cols-5 gap-2 text-sm">
-                  {PLAYERS.map(targetPlayer => (
-                    <div key={targetPlayer} className="space-y-1">
-                      <div className="capitalize text-gray-400">{targetPlayer}</div>
-                      {STATS.map(stat => {
-                        const pred = theirPredictions.find(
-                          p => p.player === targetPlayer && p.stat === stat
-                        )
-                        return (
-                          <div key={stat} className="text-xs">
-                            {STAT_LABELS[stat as Stat].slice(0, 3)}: {pred?.value || '-'}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
-    </div>
+          </div>
   )
 }

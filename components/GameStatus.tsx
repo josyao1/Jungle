@@ -34,31 +34,22 @@ export default function GameStatus({ gameNumber }: GameStatusProps) {
   })
 
   const getPhaseInfo = () => {
-    switch (phase) {
-      case 'lines_open':
-        return {
-          label: 'Lines Open',
-          sublabel: `Lock in ${formatTimeRemaining(game.linesLock)}`,
-          color: 'text-yellow-400',
-          action: '/set-lines',
-          actionLabel: 'Set Lines',
-        }
-      case 'picks_open':
-        return {
-          label: 'Picks Open',
-          sublabel: `Lock in ${formatTimeRemaining(game.picksLock)}`,
-          color: 'text-green-400',
-          action: '/pick',
-          actionLabel: 'Make Picks',
-        }
-      case 'game_started':
-        return {
-          label: 'Game Started',
-          sublabel: 'Enter results when done',
-          color: 'text-blue-400',
-          action: '/results',
-          actionLabel: 'Enter Results',
-        }
+    if (phase === 'open') {
+      return {
+        label: 'Open',
+        sublabel: `Locks in ${formatTimeRemaining(game.lockTime)}`,
+        color: 'text-green-400',
+        action: '/set-lines',
+        actionLabel: 'Set Lines & Pick',
+      }
+    } else {
+      return {
+        label: 'Locked',
+        sublabel: 'Enter results when done',
+        color: 'text-blue-400',
+        action: '/results',
+        actionLabel: 'Enter Results',
+      }
     }
   }
 

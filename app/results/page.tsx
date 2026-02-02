@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback } from 'react'
 import { PLAYERS, STATS, STAT_LABELS, PROP_BETS, PROP_BET_LABELS, GAMES, Player, Stat } from '@/lib/constants'
+import PlayerSelect from '@/components/PlayerSelect'
 import { supabase, Result, Line, Pick, PropPick } from '@/lib/supabase'
 import { calculateScores } from '@/lib/utils'
 
@@ -11,18 +12,18 @@ export default function ResultsPage() {
   const [player, setPlayer] = useState<Player | null>(null)
   const [gameId, setGameId] = useState<string | null>(null)
   const [gameNumber, setGameNumber] = useState<number>(1)
-  const [results, setResults] = useState<Record<string, Record<string, number>>>({})
+  const [results, setResults] = useState<Record<string, Record<string, string>>>({})
   const [propResults, setPropResults] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [calculated, setCalculated] = useState(false)
 
   useEffect(() => {
-    const initial: Record<string, Record<string, number>> = {}
+    const initial: Record<string, Record<string, string>> = {}
     PLAYERS.forEach(p => {
       initial[p] = {}
       STATS.forEach(s => {
-        initial[p][s] = 0
+        initial[p][s] = '' // empty = not counted/skipped
       })
     })
     setResults(initial)
@@ -59,12 +60,12 @@ export default function ResultsPage() {
       .eq('game_id', games.id)
 
     if (existingResults && existingResults.length > 0) {
-      const loaded: Record<string, Record<string, number>> = {}
+      const loaded: Record<string, Record<string, string>> = {}
       PLAYERS.forEach(p => {
         loaded[p] = {}
         STATS.forEach(s => {
           const result = existingResults.find(r => r.player === p && r.stat === s)
-          loaded[p][s] = result?.value || 0
+          loaded[p][s] = result ? String(result.value) : ''
         })
       })
       setResults(loaded)
@@ -100,12 +101,11 @@ export default function ResultsPage() {
   }, [loadData])
 
   const handleChange = (targetPlayer: string, stat: string, value: string) => {
-    const numValue = parseInt(value) || 0
     setResults(prev => ({
       ...prev,
       [targetPlayer]: {
         ...prev[targetPlayer],
-        [stat]: numValue,
+        [stat]: value, // empty = skipped/not counted
       },
     }))
   }
@@ -121,7 +121,13 @@ export default function ResultsPage() {
     if (!gameId) return
     setSaving(true)
 
-    // Save stat results
+    // Delete existing results for this game first (in case some were cleared)
+    await supabase
+      .from('results')
+      .delete()
+      .eq('game_id', gameId)
+
+    // Save stat results - only non-empty values
     const resultsToInsert: Array<{
       game_id: string
       player: string
@@ -131,18 +137,23 @@ export default function ResultsPage() {
 
     PLAYERS.forEach(p => {
       STATS.forEach(s => {
-        resultsToInsert.push({
-          game_id: gameId,
-          player: p,
-          stat: s,
-          value: results[p][s],
-        })
+        const val = results[p]?.[s]
+        if (val !== '' && val !== undefined) {
+          resultsToInsert.push({
+            game_id: gameId,
+            player: p,
+            stat: s,
+            value: parseInt(val),
+          })
+        }
       })
     })
 
-    await supabase
-      .from('results')
-      .upsert(resultsToInsert, { onConflict: 'game_id,player,stat' })
+    if (resultsToInsert.length > 0) {
+      await supabase
+        .from('results')
+        .insert(resultsToInsert)
+    }
 
     // Save prop results
     const propResultsToInsert = Object.entries(propResults)
@@ -211,8 +222,10 @@ export default function ResultsPage() {
       game_id: gameId,
       player: playerName,
       correct_picks: score.correctPicks,
+      missed_picks: score.missedPicks,
       exact_lines: score.exactLines,
       prop_wins: score.propWins,
+      prop_misses: score.propMisses,
       total_points: score.totalPoints,
     }))
 
@@ -242,7 +255,11 @@ export default function ResultsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Enter Results - Game {gameNumber}</h1>
-        <span className="text-gray-400 capitalize">Playing as: {player}</span>
+        <PlayerSelect
+          onSelect={setPlayer}
+          selected={player}
+          compact
+        />
       </div>
 
       {calculated && (
@@ -252,7 +269,8 @@ export default function ResultsPage() {
       )}
 
       <div className="bg-gray-800 rounded-lg p-4">
-        <h2 className="text-lg font-semibold mb-3">Stat Results</h2>
+        <h2 className="text-lg font-semibold mb-2">Stat Results</h2>
+        <p className="text-gray-400 text-sm mb-3">Leave blank if we forgot to track (won&apos;t count for/against anyone)</p>
 
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -275,9 +293,10 @@ export default function ResultsPage() {
                       <input
                         type="number"
                         min="0"
-                        value={results[targetPlayer]?.[stat] || 0}
+                        placeholder="—"
+                        value={results[targetPlayer]?.[stat] ?? ''}
                         onChange={(e) => handleChange(targetPlayer, stat, e.target.value)}
-                        className="w-14 px-2 py-1 bg-gray-900 border border-gray-600 rounded text-center"
+                        className="w-14 px-2 py-1 bg-gray-900 border border-gray-600 rounded text-center placeholder-gray-500"
                       />
                     </td>
                   ))}

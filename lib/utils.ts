@@ -63,9 +63,9 @@ export function calculateScores(
   results: Array<{ player: string; stat: string; value: number }>,
   predictions: Array<{ submitter: string; player: string; stat: string; value: number }>,
   propPicks: Array<{ picker: string; prop_type: string; player_picked: string }>,
-  propResults: { most_pts?: string; most_3pm?: string; coolest_moment?: string }
-): Map<string, { correctPicks: number; exactLines: number; propWins: number; totalPoints: number }> {
-  const scores = new Map<string, { correctPicks: number; exactLines: number; propWins: number; totalPoints: number }>()
+  propResults: Record<string, string>
+): Map<string, { correctPicks: number; missedPicks: number; exactLines: number; propWins: number; propMisses: number; totalPoints: number }> {
+  const scores = new Map<string, { correctPicks: number; missedPicks: number; exactLines: number; propWins: number; propMisses: number; totalPoints: number }>()
 
   // Create lookup maps
   const lineMap = new Map<string, number>()
@@ -84,12 +84,16 @@ export function calculateScores(
 
     if (line === undefined || result === undefined) return
 
-    const current = scores.get(pick.picker) || { correctPicks: 0, exactLines: 0, propWins: 0, totalPoints: 0 }
+    const current = scores.get(pick.picker) || { correctPicks: 0, missedPicks: 0, exactLines: 0, propWins: 0, propMisses: 0, totalPoints: 0 }
 
     // Check if they hit (result >= line, since we're being supportive)
     if (result >= line) {
       current.correctPicks++
-      current.totalPoints++
+      current.totalPoints += 1
+    } else {
+      // Missed the over - penalty
+      current.missedPicks++
+      current.totalPoints -= 0.5
     }
 
     scores.set(pick.picker, current)
@@ -102,12 +106,12 @@ export function calculateScores(
 
     if (result === undefined) return
 
-    const current = scores.get(pred.submitter) || { correctPicks: 0, exactLines: 0, propWins: 0, totalPoints: 0 }
+    const current = scores.get(pred.submitter) || { correctPicks: 0, missedPicks: 0, exactLines: 0, propWins: 0, propMisses: 0, totalPoints: 0 }
 
     // Exact match bonus
     if (pred.value === result) {
       current.exactLines++
-      current.totalPoints++
+      current.totalPoints += 1
     }
 
     scores.set(pred.submitter, current)
@@ -115,12 +119,18 @@ export function calculateScores(
 
   // Calculate prop bet scores
   propPicks.forEach(prop => {
-    const current = scores.get(prop.picker) || { correctPicks: 0, exactLines: 0, propWins: 0, totalPoints: 0 }
+    const current = scores.get(prop.picker) || { correctPicks: 0, missedPicks: 0, exactLines: 0, propWins: 0, propMisses: 0, totalPoints: 0 }
 
-    const winner = propResults[prop.prop_type as keyof typeof propResults]
-    if (winner && prop.player_picked === winner) {
-      current.propWins++
-      current.totalPoints++
+    const winner = propResults[prop.prop_type]
+    if (winner) {
+      if (prop.player_picked === winner) {
+        current.propWins++
+        current.totalPoints += 1
+      } else {
+        // Wrong prop pick - penalty
+        current.propMisses++
+        current.totalPoints -= 0.5
+      }
     }
 
     scores.set(prop.picker, current)

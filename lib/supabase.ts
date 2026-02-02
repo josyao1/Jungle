@@ -85,7 +85,10 @@ export interface Score {
   game_id: string
   player: string
   correct_picks: number
+  missed_picks: number
   exact_lines: number
+  prop_wins: number
+  prop_misses: number
   total_points: number
   created_at: string
 }

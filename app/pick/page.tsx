@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback } from 'react'
 import { PLAYERS, STATS, STAT_LABELS, PROP_BETS, PROP_BET_LABELS, GAMES, getGamePhase, Player, Stat, PropBet } from '@/lib/constants'
+import PlayerSelect from '@/components/PlayerSelect'
 import { supabase, Line, Pick, PropPick } from '@/lib/supabase'
 import { calculateAveragedLine } from '@/lib/utils'
 
@@ -31,37 +32,45 @@ export default function PickPage() {
       return now < gameEnd
     }) || GAMES[GAMES.length - 1]
 
-    setPhase(getGamePhase(currentGame))
+    const currentPhase = getGamePhase(currentGame)
+    setPhase(currentPhase)
 
-    const { data: games } = await supabase
+    let { data: games } = await supabase
       .from('games')
       .select('id')
       .eq('game_number', currentGame.number)
       .single()
 
+    // If game doesn't exist, create it
     if (!games) {
-      setLoading(false)
-      return
+      const { data: newGame } = await supabase
+        .from('games')
+        .insert({
+          game_number: currentGame.number,
+          game_date: currentGame.date.toISOString(),
+          lines_lock_time: currentGame.lockTime.toISOString(),
+          picks_lock_time: currentGame.lockTime.toISOString(),
+          status: 'upcoming'
+        })
+        .select('id')
+        .single()
+
+      if (!newGame) {
+        setLoading(false)
+        return
+      }
+      games = newGame
     }
     setGameId(games.id)
 
-    // Try to load averaged lines first
-    let { data: existingLines } = await supabase
+    // Always calculate live lines from current predictions
+    await calculateAndSaveLines(games.id)
+    const { data: liveLines } = await supabase
       .from('lines')
       .select('*')
       .eq('game_id', games.id)
 
-    // If no averaged lines exist and we're in picks phase, calculate them
-    if ((!existingLines || existingLines.length === 0) && getGamePhase(currentGame) !== 'lines_open') {
-      await calculateAndSaveLines(games.id)
-      const { data: newLines } = await supabase
-        .from('lines')
-        .select('*')
-        .eq('game_id', games.id)
-      existingLines = newLines
-    }
-
-    setLines(existingLines || [])
+    setLines(liveLines || [])
 
     // Load existing picks
     const { data: existingPicks } = await supabase
@@ -117,6 +126,12 @@ export default function PickPage() {
       .select('*')
       .eq('game_id', gId)
 
+    // Always clear old lines first, then recalculate
+    await supabase
+      .from('lines')
+      .delete()
+      .eq('game_id', gId)
+
     if (!predictions || predictions.length === 0) return
 
     // Calculate averaged lines
@@ -144,9 +159,11 @@ export default function PickPage() {
       })
     })
 
-    await supabase
-      .from('lines')
-      .upsert(linesToInsert, { onConflict: 'game_id,player,stat' })
+    if (linesToInsert.length > 0) {
+      await supabase
+        .from('lines')
+        .insert(linesToInsert)
+    }
   }
 
   useEffect(() => {
@@ -239,27 +256,28 @@ export default function PickPage() {
     )
   }
 
-  const isLocked = phase === 'game_started'
-  const linesNotReady = phase === 'lines_open'
+  const isLocked = phase === 'locked'
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Make Picks</h1>
-        <span className="text-gray-400 capitalize">Playing as: {player}</span>
+        <PlayerSelect
+          onSelect={setPlayer}
+          selected={player}
+          compact
+        />
       </div>
-
-      {linesNotReady && (
-        <div className="bg-yellow-900/50 border border-yellow-700 rounded-lg p-4">
-          <p className="text-yellow-400">
-            Lines haven&apos;t locked yet. Your picks won&apos;t be locked until 4:30pm.
-          </p>
-        </div>
-      )}
 
       {isLocked && (
         <div className="bg-red-900/50 border border-red-700 rounded-lg p-4">
           <p className="text-red-400">Picks are locked. Game has started!</p>
+        </div>
+      )}
+
+      {!isLocked && lines.length === 0 && (
+        <div className="bg-yellow-900/50 border border-yellow-700 rounded-lg p-4">
+          <p className="text-yellow-400">No lines yet. Set some lines first, then come back to pick!</p>
         </div>
       )}
 

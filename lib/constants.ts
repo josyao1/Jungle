@@ -13,41 +13,39 @@ export const STAT_LABELS: Record<Stat, string> = {
 }
 
 // Prop bets - automatically set up for each game
-export const PROP_BETS = ['most_pts', 'most_3pm', 'coolest_moment'] as const
+export const PROP_BETS = ['most_pts', 'most_3pm', 'coolest_moment', 'biggest_fail', 'most_missed_ft'] as const
 export type PropBet = typeof PROP_BETS[number]
 
 export const PROP_BET_LABELS: Record<PropBet, string> = {
   most_pts: 'Most Points',
   most_3pm: 'Most 3-Pointers',
   coolest_moment: 'Coolest Moment',
+  biggest_fail: 'Biggest Fail',
+  most_missed_ft: 'Most Missed FTs',
 }
 
 // Game dates - all at 5pm CST (UTC-6 = 11pm UTC)
-// Lines lock at 4:30pm CST, picks lock at 5pm CST
+// Everything locks at 5pm CST when the game starts
 export const GAMES = [
   {
     number: 1,
     date: new Date('2026-02-02T23:00:00Z'), // Feb 2 at 5pm CST
-    linesLock: new Date('2026-02-02T22:30:00Z'), // 4:30pm CST
-    picksLock: new Date('2026-02-02T23:00:00Z'), // 5pm CST
+    lockTime: new Date('2026-02-02T23:00:00Z'), // 5pm CST - lines & picks lock
   },
   {
     number: 2,
     date: new Date('2026-02-09T23:00:00Z'), // Feb 9
-    linesLock: new Date('2026-02-09T22:30:00Z'),
-    picksLock: new Date('2026-02-09T23:00:00Z'),
+    lockTime: new Date('2026-02-09T23:00:00Z'),
   },
   {
     number: 3,
     date: new Date('2026-02-16T23:00:00Z'), // Feb 16
-    linesLock: new Date('2026-02-16T22:30:00Z'),
-    picksLock: new Date('2026-02-16T23:00:00Z'),
+    lockTime: new Date('2026-02-16T23:00:00Z'),
   },
   {
     number: 4,
     date: new Date('2026-02-23T23:00:00Z'), // Feb 23
-    linesLock: new Date('2026-02-23T22:30:00Z'),
-    picksLock: new Date('2026-02-23T23:00:00Z'),
+    lockTime: new Date('2026-02-23T23:00:00Z'),
   },
 ]
 
@@ -68,11 +66,9 @@ export function getCurrentGame() {
 export function getGamePhase(game: typeof GAMES[number]) {
   const now = new Date()
 
-  if (now < game.linesLock) {
-    return 'lines_open' // Can submit line predictions
-  } else if (now < game.picksLock) {
-    return 'picks_open' // Can make over/under picks
+  if (now < game.lockTime) {
+    return 'open' // Can submit lines and picks
   } else {
-    return 'game_started' // Game in progress or completed
+    return 'locked' // Game in progress or completed
   }
 }
