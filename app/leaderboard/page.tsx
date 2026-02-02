@@ -210,7 +210,6 @@ export default function LeaderboardPage() {
           <li><span className="text-red-400">-0.5</span> for each missed over pick</li>
           <li><span className="text-green-400">+1</span> bonus for predicting exact stat value</li>
           <li><span className="text-green-400">+1</span> for each correct prop bet</li>
-          <li><span className="text-red-400">-0.5</span> for each wrong prop bet</li>
         </ul>
       </div>
     </div>

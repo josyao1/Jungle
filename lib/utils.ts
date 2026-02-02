@@ -117,7 +117,7 @@ export function calculateScores(
     scores.set(pred.submitter, current)
   })
 
-  // Calculate prop bet scores
+  // Calculate prop bet scores (no penalty for misses)
   propPicks.forEach(prop => {
     const current = scores.get(prop.picker) || { correctPicks: 0, missedPicks: 0, exactLines: 0, propWins: 0, propMisses: 0, totalPoints: 0 }
 
@@ -126,11 +126,8 @@ export function calculateScores(
       if (prop.player_picked === winner) {
         current.propWins++
         current.totalPoints += 1
-      } else {
-        // Wrong prop pick - penalty
-        current.propMisses++
-        current.totalPoints -= 0.5
       }
+      // No penalty for wrong prop picks
     }
 
     scores.set(prop.picker, current)

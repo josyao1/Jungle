@@ -13,15 +13,12 @@ export const STAT_LABELS: Record<Stat, string> = {
 }
 
 // Prop bets - automatically set up for each game
-export const PROP_BETS = ['most_pts', 'most_3pm', 'coolest_moment', 'biggest_fail', 'most_missed_ft'] as const
+export const PROP_BETS = ['most_missed_ft', 'defensive_liability'] as const
 export type PropBet = typeof PROP_BETS[number]
 
 export const PROP_BET_LABELS: Record<PropBet, string> = {
-  most_pts: 'Most Points',
-  most_3pm: 'Most 3-Pointers',
-  coolest_moment: 'Coolest Moment',
-  biggest_fail: 'Biggest Fail',
   most_missed_ft: 'Most Missed FTs',
+  defensive_liability: 'Biggest Defensive Liability',
 }
 
 // Game dates - all at 5pm CST (UTC-6 = 11pm UTC)
