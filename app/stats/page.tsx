@@ -182,14 +182,24 @@ export default function StatsPage() {
       <div className="glass-card rounded-2xl p-6">
         <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-4">Weekly Team MVPs</h2>
         <div className="grid grid-cols-4 gap-4">
-          {weeklyMVPs.map(({ week, mvp }) => (
-            <div key={week} className="glass-card rounded-xl p-4 text-center">
-              <div className="text-slate-500 text-sm mb-1">Week {week}</div>
-              <div className="text-lg font-semibold capitalize">
-                {mvp || <span className="text-slate-600">TBD</span>}
+          {weeklyMVPs.map(({ week, mvp }) => {
+            const mvpSubtext: Record<number, string> = {
+              1: '9-0 run to give us control',
+            }
+            return (
+              <div key={week} className="glass-card rounded-xl p-4 text-center">
+                <div className="text-slate-500 text-sm mb-1">Week {week}</div>
+                <div className="text-lg font-semibold capitalize">
+                  {mvp || <span className="text-slate-600">TBD</span>}
+                </div>
+                {mvpSubtext[week] && (
+                  <div className="text-xs text-slate-500 mt-2 italic">
+                    "{mvpSubtext[week]}"
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </div>
 
