@@ -2,8 +2,8 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Jungle Sportsbook',
-  description: 'IM Basketball Team Sportsbook',
+  title: 'JUNGLE',
+  description: 'IM Basketball Sportsbook',
 }
 
 export default function RootLayout({
@@ -13,22 +13,26 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-gray-900 text-white">
-        <nav className="bg-gray-800 border-b border-gray-700">
-          <div className="max-w-4xl mx-auto px-4 py-3">
+      <body className="min-h-screen">
+        <nav className="glass-card border-b border-white/5">
+          <div className="max-w-5xl mx-auto px-4 py-4">
             <div className="flex items-center justify-between">
-              <a href="/" className="text-xl font-bold text-green-400">🏀 Jungle</a>
-              <div className="flex gap-4 text-sm">
-                <a href="/set-lines" className="hover:text-green-400">Set Lines</a>
-                <a href="/pick" className="hover:text-green-400">Pick</a>
-                <a href="/results" className="hover:text-green-400">Results</a>
-                <a href="/leaderboard" className="hover:text-green-400">Leaderboard</a>
-                <a href="/stats" className="hover:text-green-400">Stats</a>
+              <a href="/" className="text-2xl font-bold tracking-wide">
+                <span className="bg-gradient-to-r from-court-accent to-court-orange bg-clip-text text-transparent">
+                  JUNGLE
+                </span>
+              </a>
+              <div className="flex gap-6 text-sm font-medium">
+                <a href="/set-lines" className="text-slate-400 hover:text-white transition-colors">Lines</a>
+                <a href="/pick" className="text-slate-400 hover:text-white transition-colors">Pick</a>
+                <a href="/results" className="text-slate-400 hover:text-white transition-colors">Results</a>
+                <a href="/leaderboard" className="text-slate-400 hover:text-white transition-colors">Board</a>
+                <a href="/stats" className="text-slate-400 hover:text-white transition-colors">Stats</a>
               </div>
             </div>
           </div>
         </nav>
-        <main className="max-w-4xl mx-auto px-4 py-6">
+        <main className="max-w-5xl mx-auto px-4 py-8">
           {children}
         </main>
       </body>

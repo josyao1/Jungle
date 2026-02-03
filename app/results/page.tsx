@@ -23,7 +23,7 @@ export default function ResultsPage() {
     PLAYERS.forEach(p => {
       initial[p] = {}
       STATS.forEach(s => {
-        initial[p][s] = '' // empty = not counted/skipped
+        initial[p][s] = ''
       })
     })
     setResults(initial)
@@ -53,7 +53,6 @@ export default function ResultsPage() {
     }
     setGameId(games.id)
 
-    // Load existing results
     const { data: existingResults } = await supabase
       .from('results')
       .select('*')
@@ -71,7 +70,6 @@ export default function ResultsPage() {
       setResults(loaded)
     }
 
-    // Load existing prop results
     const { data: existingPropResults } = await supabase
       .from('prop_results')
       .select('*')
@@ -80,13 +78,11 @@ export default function ResultsPage() {
     if (existingPropResults) {
       const loaded: Record<string, string[]> = {}
       existingPropResults.forEach(p => {
-        // Winners stored as comma-separated string for ties
         loaded[p.prop_type] = p.winner.split(',').map((w: string) => w.trim())
       })
       setPropResults(loaded)
     }
 
-    // Check if scores already calculated
     const { data: scores } = await supabase
       .from('scores')
       .select('id')
@@ -106,7 +102,7 @@ export default function ResultsPage() {
       ...prev,
       [targetPlayer]: {
         ...prev[targetPlayer],
-        [stat]: value, // empty = skipped/not counted
+        [stat]: value,
       },
     }))
   }
@@ -114,7 +110,6 @@ export default function ResultsPage() {
   const handlePropResult = (propType: string, winner: string) => {
     setPropResults(prev => {
       const current = prev[propType] || []
-      // Toggle: add if not present, remove if present
       const updated = current.includes(winner)
         ? current.filter(w => w !== winner)
         : [...current, winner]
@@ -126,13 +121,8 @@ export default function ResultsPage() {
     if (!gameId) return
     setSaving(true)
 
-    // Delete existing results for this game first (in case some were cleared)
-    await supabase
-      .from('results')
-      .delete()
-      .eq('game_id', gameId)
+    await supabase.from('results').delete().eq('game_id', gameId)
 
-    // Save stat results - only non-empty values
     const resultsToInsert: Array<{
       game_id: string
       player: string
@@ -155,12 +145,9 @@ export default function ResultsPage() {
     })
 
     if (resultsToInsert.length > 0) {
-      await supabase
-        .from('results')
-        .insert(resultsToInsert)
+      await supabase.from('results').insert(resultsToInsert)
     }
 
-    // Save prop results (join array for ties)
     const propResultsToInsert = Object.entries(propResults)
       .filter(([, winners]) => winners && winners.length > 0)
       .map(([propType, winners]) => ({
@@ -170,9 +157,7 @@ export default function ResultsPage() {
       }))
 
     if (propResultsToInsert.length > 0) {
-      await supabase
-        .from('prop_results')
-        .upsert(propResultsToInsert, { onConflict: 'game_id,prop_type' })
+      await supabase.from('prop_results').upsert(propResultsToInsert, { onConflict: 'game_id,prop_type' })
     }
 
     setSaving(false)
@@ -183,7 +168,6 @@ export default function ResultsPage() {
     if (!gameId) return
     setSaving(true)
 
-    // Fetch all data needed for score calculation
     const [
       { data: lines },
       { data: picks },
@@ -206,13 +190,11 @@ export default function ResultsPage() {
       return
     }
 
-    // Build prop results object
     const propResultsObj: Record<string, string> = {}
     propResultsData?.forEach(p => {
       propResultsObj[p.prop_type] = p.winner
     })
 
-    // Calculate scores
     const scores = calculateScores(
       picks as Pick[],
       lines as Line[],
@@ -222,7 +204,6 @@ export default function ResultsPage() {
       propResultsObj
     )
 
-    // Save scores
     const scoresToInsert = Array.from(scores.entries()).map(([playerName, score]) => ({
       game_id: gameId,
       player: playerName,
@@ -234,17 +215,10 @@ export default function ResultsPage() {
       total_points: score.totalPoints,
     }))
 
-    // Delete old scores first for clean recalculation
-    await supabase
-      .from('scores')
-      .delete()
-      .eq('game_id', gameId)
+    await supabase.from('scores').delete().eq('game_id', gameId)
 
-    // Insert fresh scores
     if (scoresToInsert.length > 0) {
-      await supabase
-        .from('scores')
-        .insert(scoresToInsert)
+      await supabase.from('scores').insert(scoresToInsert)
     }
 
     setCalculated(true)
@@ -253,14 +227,14 @@ export default function ResultsPage() {
   }
 
   if (loading) {
-    return <div className="text-center py-8">Loading...</div>
+    return <div className="text-center py-8 text-slate-500">Loading...</div>
   }
 
   if (!player) {
     return (
       <div className="text-center py-8">
-        <p className="mb-4">Please select your name first</p>
-        <a href="/" className="text-green-400 hover:underline">Go to home</a>
+        <p className="mb-4 text-slate-500">Select your name first</p>
+        <a href="/" className="text-court-accent hover:underline">Go to home</a>
       </div>
     )
   }
@@ -269,48 +243,42 @@ export default function ResultsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Enter Results - Game {gameNumber}</h1>
-        <PlayerSelect
-          onSelect={setPlayer}
-          selected={player}
-          compact
-        />
+        <PlayerSelect onSelect={setPlayer} selected={player} compact />
       </div>
 
       {calculated && (
-        <div className="bg-green-900/50 border border-green-700 rounded-lg p-4">
-          <p className="text-green-400">Scores have been calculated! Check the leaderboard.</p>
+        <div className="glass-card rounded-xl p-4 border-green-500/30">
+          <p className="text-green-400 text-sm">Scores calculated! Check the leaderboard.</p>
         </div>
       )}
 
-      <div className="bg-gray-800 rounded-lg p-4">
-        <h2 className="text-lg font-semibold mb-2">Stat Results</h2>
-        <p className="text-gray-400 text-sm mb-3">Leave blank if we forgot to track (won&apos;t count for/against anyone)</p>
+      <div className="glass-card rounded-2xl p-6">
+        <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-2">Stat Results</h2>
+        <p className="text-slate-500 text-sm mb-4">Leave blank if not tracked</p>
 
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="glass-table">
             <thead>
-              <tr className="border-b border-gray-700">
-                <th className="px-2 py-2 text-left">Player</th>
+              <tr>
+                <th>Player</th>
                 {STATS.map(stat => (
-                  <th key={stat} className="px-2 py-2 text-center text-xs">
-                    {STAT_LABELS[stat]}
-                  </th>
+                  <th key={stat} className="text-center">{STAT_LABELS[stat]}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {PLAYERS.map(targetPlayer => (
-                <tr key={targetPlayer} className="border-b border-gray-700/50">
-                  <td className="px-2 py-2 capitalize font-medium">{targetPlayer}</td>
+                <tr key={targetPlayer}>
+                  <td className="capitalize font-medium">{targetPlayer}</td>
                   {STATS.map(stat => (
-                    <td key={stat} className="px-2 py-2">
+                    <td key={stat} className="text-center">
                       <input
                         type="number"
                         min="0"
                         placeholder="—"
                         value={results[targetPlayer]?.[stat] ?? ''}
                         onChange={(e) => handleChange(targetPlayer, stat, e.target.value)}
-                        className="w-14 px-2 py-1 bg-gray-900 border border-gray-600 rounded text-center placeholder-gray-500"
+                        className="w-14 px-2 py-2 glass-input rounded-lg text-center"
                       />
                     </td>
                   ))}
@@ -321,23 +289,23 @@ export default function ResultsPage() {
         </div>
       </div>
 
-      <div className="bg-gray-800 rounded-lg p-4">
-        <h2 className="text-lg font-semibold mb-2">Prop Results</h2>
-        <p className="text-gray-400 text-sm mb-3">Select multiple for ties</p>
+      <div className="glass-card rounded-2xl p-6">
+        <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-2">Prop Results</h2>
+        <p className="text-slate-500 text-sm mb-4">Select multiple for ties</p>
 
-        <div className="space-y-4">
+        <div className="space-y-6">
           {PROP_BETS.map(prop => (
             <div key={prop}>
-              <h3 className="text-sm font-medium mb-2">{PROP_BET_LABELS[prop]}</h3>
+              <h3 className="text-sm text-slate-300 mb-3">{PROP_BET_LABELS[prop]}</h3>
               <div className="grid grid-cols-6 gap-2">
                 {PLAYERS.map(p => (
                   <button
                     key={p}
                     onClick={() => handlePropResult(prop, p)}
-                    className={`px-2 py-2 rounded text-xs capitalize transition-colors ${
+                    className={`px-2 py-3 rounded-lg text-xs capitalize font-medium transition-all ${
                       propResults[prop]?.includes(p)
-                        ? 'bg-yellow-600 text-white'
-                        : 'bg-gray-700 hover:bg-gray-600'
+                        ? 'bg-court-accent/20 border-2 border-court-accent text-court-accent'
+                        : 'btn-secondary'
                     }`}
                   >
                     {p}
@@ -353,14 +321,14 @@ export default function ResultsPage() {
         <button
           onClick={handleSubmit}
           disabled={saving}
-          className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition-colors disabled:opacity-50"
+          className="flex-1 btn-secondary py-3 rounded-xl text-sm font-medium disabled:opacity-50"
         >
           {saving ? 'Saving...' : 'Save Results'}
         </button>
         <button
           onClick={handleCalculateScores}
           disabled={saving}
-          className="flex-1 py-3 bg-green-600 hover:bg-green-700 rounded-lg font-medium transition-colors disabled:opacity-50"
+          className="flex-1 btn-accent py-3 rounded-xl text-sm font-semibold disabled:opacity-50"
         >
           {saving ? 'Calculating...' : calculated ? 'Recalculate Scores' : 'Calculate Scores'}
         </button>

@@ -16,12 +16,13 @@ export default function GameStatus({ gameNumber }: GameStatusProps) {
     return () => clearInterval(interval)
   }, [])
 
-  // Find current/next game
   const game = gameNumber
     ? GAMES.find(g => g.number === gameNumber)
     : GAMES.find(g => {
-        const gameEnd = new Date(g.date.getTime() + 3 * 60 * 60 * 1000)
-        return now < gameEnd
+        const nextMorning = new Date(g.date)
+        nextMorning.setDate(nextMorning.getDate() + 1)
+        nextMorning.setUTCHours(14, 0, 0, 0)
+        return now < nextMorning
       }) || GAMES[GAMES.length - 1]
 
   if (!game) return null
@@ -36,19 +37,19 @@ export default function GameStatus({ gameNumber }: GameStatusProps) {
   const getPhaseInfo = () => {
     if (phase === 'open') {
       return {
-        label: 'Open',
-        sublabel: `Locks in ${formatTimeRemaining(game.lockTime)}`,
-        color: 'text-green-400',
+        label: 'OPEN',
+        sublabel: formatTimeRemaining(game.lockTime),
+        badgeClass: 'badge-open',
         action: '/set-lines',
-        actionLabel: 'Set Lines & Pick',
+        actionLabel: 'Set Lines',
       }
     } else {
       return {
-        label: 'Locked',
-        sublabel: 'Enter results when done',
-        color: 'text-blue-400',
+        label: 'LOCKED',
+        sublabel: 'Final',
+        badgeClass: 'badge-locked',
         action: '/results',
-        actionLabel: 'Enter Results',
+        actionLabel: 'Results',
       }
     }
   }
@@ -56,19 +57,23 @@ export default function GameStatus({ gameNumber }: GameStatusProps) {
   const info = getPhaseInfo()
 
   return (
-    <div className="bg-gray-800 rounded-lg p-4">
-      <div className="flex items-center justify-between mb-2">
-        <h2 className="text-lg font-semibold">Game {game.number}</h2>
-        <span className="text-gray-400 text-sm">{gameDate} @ 5pm</span>
-      </div>
+    <div className="glass-card rounded-2xl p-6">
       <div className="flex items-center justify-between">
         <div>
-          <span className={`font-medium ${info.color}`}>{info.label}</span>
-          <p className="text-gray-400 text-sm">{info.sublabel}</p>
+          <div className="text-sm text-slate-500 mb-1">
+            {gameDate} • 5:00 PM
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-2xl font-bold">Game {game.number}</span>
+            <span className={`badge ${info.badgeClass}`}>{info.label}</span>
+          </div>
+          <div className="text-sm text-slate-400 mt-1">
+            {phase === 'open' ? `Locks in ${info.sublabel}` : info.sublabel}
+          </div>
         </div>
         <a
           href={info.action}
-          className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-sm font-medium transition-colors"
+          className="btn-accent px-6 py-3 rounded-xl text-sm font-semibold"
         >
           {info.actionLabel}
         </a>

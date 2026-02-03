@@ -41,7 +41,6 @@ export default function PickPage() {
       .eq('game_number', currentGame.number)
       .single()
 
-    // If game doesn't exist, create it
     if (!games) {
       const { data: newGame } = await supabase
         .from('games')
@@ -63,7 +62,6 @@ export default function PickPage() {
     }
     setGameId(games.id)
 
-    // Always calculate live lines from current predictions
     await calculateAndSaveLines(games.id)
     const { data: liveLines } = await supabase
       .from('lines')
@@ -72,7 +70,6 @@ export default function PickPage() {
 
     setLines(liveLines || [])
 
-    // Load existing picks
     const { data: existingPicks } = await supabase
       .from('picks')
       .select('*')
@@ -90,7 +87,6 @@ export default function PickPage() {
       })
       setPicks(loaded)
     } else {
-      // Initialize empty picks
       const initial: Record<string, Record<string, boolean>> = {}
       PLAYERS.forEach(p => {
         initial[p] = {}
@@ -101,7 +97,6 @@ export default function PickPage() {
       setPicks(initial)
     }
 
-    // Load existing prop picks
     const { data: existingPropPicks } = await supabase
       .from('prop_picks')
       .select('*')
@@ -120,21 +115,15 @@ export default function PickPage() {
   }, [])
 
   const calculateAndSaveLines = async (gId: string) => {
-    // Get all predictions
     const { data: predictions } = await supabase
       .from('line_predictions')
       .select('*')
       .eq('game_id', gId)
 
-    // Always clear old lines first, then recalculate
-    await supabase
-      .from('lines')
-      .delete()
-      .eq('game_id', gId)
+    await supabase.from('lines').delete().eq('game_id', gId)
 
     if (!predictions || predictions.length === 0) return
 
-    // Calculate averaged lines
     const linesToInsert: Array<{
       game_id: string
       player: string
@@ -160,9 +149,7 @@ export default function PickPage() {
     })
 
     if (linesToInsert.length > 0) {
-      await supabase
-        .from('lines')
-        .insert(linesToInsert)
+      await supabase.from('lines').insert(linesToInsert)
     }
   }
 
@@ -191,7 +178,6 @@ export default function PickPage() {
     if (!player || !gameId) return
     setSaving(true)
 
-    // Save line picks
     const picksToInsert: Array<{
       game_id: string
       picker: string
@@ -214,11 +200,8 @@ export default function PickPage() {
       })
     })
 
-    await supabase
-      .from('picks')
-      .upsert(picksToInsert, { onConflict: 'game_id,picker,player,stat' })
+    await supabase.from('picks').upsert(picksToInsert, { onConflict: 'game_id,picker,player,stat' })
 
-    // Save prop picks
     const propPicksToInsert = Object.entries(propPicks)
       .filter(([, pickedPlayer]) => pickedPlayer)
       .map(([propType, pickedPlayer]) => ({
@@ -229,9 +212,7 @@ export default function PickPage() {
       }))
 
     if (propPicksToInsert.length > 0) {
-      await supabase
-        .from('prop_picks')
-        .upsert(propPicksToInsert, { onConflict: 'game_id,picker,prop_type' })
+      await supabase.from('prop_picks').upsert(propPicksToInsert, { onConflict: 'game_id,picker,prop_type' })
     }
 
     setSaving(false)
@@ -244,14 +225,14 @@ export default function PickPage() {
   }
 
   if (loading) {
-    return <div className="text-center py-8">Loading...</div>
+    return <div className="text-center py-8 text-slate-500">Loading...</div>
   }
 
   if (!player) {
     return (
       <div className="text-center py-8">
-        <p className="mb-4">Please select your name first</p>
-        <a href="/" className="text-green-400 hover:underline">Go to home</a>
+        <p className="mb-4 text-slate-500">Select your name first</p>
+        <a href="/" className="text-court-accent hover:underline">Go to home</a>
       </div>
     )
   }
@@ -262,70 +243,62 @@ export default function PickPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Make Picks</h1>
-        <PlayerSelect
-          onSelect={setPlayer}
-          selected={player}
-          compact
-        />
+        <PlayerSelect onSelect={setPlayer} selected={player} compact />
       </div>
 
       {!isLocked && (
         <button
           onClick={handleSubmit}
           disabled={saving}
-          className="w-full py-3 bg-green-600 hover:bg-green-700 rounded-lg font-medium transition-colors disabled:opacity-50"
+          className="w-full btn-accent py-3 rounded-xl text-sm font-semibold disabled:opacity-50"
         >
           {saving ? 'Saving...' : 'Save Picks'}
         </button>
       )}
 
       {isLocked && (
-        <div className="bg-red-900/50 border border-red-700 rounded-lg p-4">
-          <p className="text-red-400">Picks are locked. Game has started!</p>
+        <div className="glass-card rounded-xl p-4 border-red-500/30">
+          <p className="text-red-400 text-sm">Picks are locked. Game has started!</p>
         </div>
       )}
 
       {!isLocked && lines.length === 0 && (
-        <div className="bg-yellow-900/50 border border-yellow-700 rounded-lg p-4">
-          <p className="text-yellow-400">No lines yet. Set some lines first, then come back to pick!</p>
+        <div className="glass-card rounded-xl p-4 border-yellow-500/30">
+          <p className="text-yellow-400 text-sm">No lines yet. Set some lines first!</p>
         </div>
       )}
 
-      <div className="bg-gray-800 rounded-lg p-4">
-        <h2 className="text-lg font-semibold mb-3">Line Picks</h2>
-        <p className="text-gray-400 text-sm mb-4">
-          Tap to bet they&apos;ll hit the over. Support the squad! 🔥
+      <div className="glass-card rounded-2xl p-6">
+        <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-2">Line Picks</h2>
+        <p className="text-slate-500 text-sm mb-4">
+          Tap to bet on the over. Support the squad!
         </p>
 
         <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="glass-table">
             <thead>
-              <tr className="border-b border-gray-700">
-                <th className="px-2 py-2 text-left text-sm">Player</th>
+              <tr>
+                <th>Player</th>
                 {STATS.map(stat => (
-                  <th key={stat} className="px-2 py-2 text-center text-xs">
-                    {STAT_LABELS[stat]}
-                  </th>
+                  <th key={stat} className="text-center">{STAT_LABELS[stat]}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {PLAYERS.map(targetPlayer => (
-                <tr key={targetPlayer} className="border-b border-gray-700/50">
-                  <td className="px-2 py-2 capitalize text-sm font-medium">{targetPlayer}</td>
+                <tr key={targetPlayer}>
+                  <td className="capitalize font-medium">{targetPlayer}</td>
                   {STATS.map(stat => {
                     const line = getLine(targetPlayer, stat)
                     const isPicked = picks[targetPlayer]?.[stat]
 
                     return (
-                      <td key={stat} className="px-2 py-2 text-center">
+                      <td key={stat} className="text-center">
                         <button
                           onClick={() => !isLocked && togglePick(targetPlayer, stat)}
                           disabled={isLocked}
-                          className={`w-14 h-10 rounded text-sm font-medium transition-colors ${
-                            isPicked
-                              ? 'bg-green-600 text-white'
-                              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                          className={`w-14 h-10 rounded-lg text-sm font-medium transition-all pick-btn ${
+                            isPicked ? 'selected' : ''
                           } disabled:opacity-50`}
                         >
                           {line !== null ? line : '-'}
@@ -339,29 +312,27 @@ export default function PickPage() {
           </table>
         </div>
 
-        <div className="mt-4 text-sm text-gray-400">
-          <span className="inline-block w-3 h-3 bg-green-600 rounded mr-1"></span>
+        <div className="mt-4 text-sm text-slate-500 flex items-center gap-2">
+          <span className="inline-block w-3 h-3 border-2 border-green-500 rounded bg-green-500/20"></span>
           = Picked Over
         </div>
       </div>
 
-      <div className="bg-gray-800 rounded-lg p-4">
-        <h2 className="text-lg font-semibold mb-3">Prop Bets</h2>
+      <div className="glass-card rounded-2xl p-6">
+        <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-4">Prop Bets</h2>
 
-        <div className="space-y-4">
+        <div className="space-y-6">
           {PROP_BETS.map(prop => (
             <div key={prop}>
-              <h3 className="text-sm font-medium mb-2">{PROP_BET_LABELS[prop]}</h3>
+              <h3 className="text-sm text-slate-300 mb-3">{PROP_BET_LABELS[prop]}</h3>
               <div className="grid grid-cols-6 gap-2">
                 {PLAYERS.map(p => (
                   <button
                     key={p}
                     onClick={() => !isLocked && handlePropPick(prop, p)}
                     disabled={isLocked}
-                    className={`px-2 py-2 rounded text-xs capitalize transition-colors ${
-                      propPicks[prop] === p
-                        ? 'bg-green-600 text-white'
-                        : 'bg-gray-700 hover:bg-gray-600'
+                    className={`px-2 py-3 rounded-lg text-xs capitalize font-medium transition-all pick-btn ${
+                      propPicks[prop] === p ? 'selected' : ''
                     } disabled:opacity-50`}
                   >
                     {p}

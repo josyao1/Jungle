@@ -15,7 +15,6 @@ export default function PlayerSelect({ onSelect, selected, compact }: PlayerSele
   const initialLoadDone = useRef(false)
 
   useEffect(() => {
-    // Load from localStorage on mount (only once)
     if (initialLoadDone.current) return
     initialLoadDone.current = true
 
@@ -33,47 +32,45 @@ export default function PlayerSelect({ onSelect, selected, compact }: PlayerSele
     onSelect(player)
     setShowPicker(false)
 
-    // Only reload if user actively switched players
     if (isSwitch && changed) {
       window.location.reload()
     }
   }
 
-  // Compact mode - just shows current player with switch button
   if (compact && currentPlayer && !showPicker) {
     return (
       <button
         onClick={() => setShowPicker(true)}
-        className="text-sm text-gray-400 hover:text-white flex items-center gap-1"
+        className="text-sm text-slate-400 hover:text-white transition-colors flex items-center gap-2"
       >
-        <span className="capitalize">{currentPlayer}</span>
-        <span className="text-xs">(switch)</span>
+        <span className="capitalize font-medium">{currentPlayer}</span>
+        <span className="text-xs text-slate-500">[switch]</span>
       </button>
     )
   }
 
   return (
-    <div className="bg-gray-800 rounded-lg p-4">
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="text-lg font-semibold">Who are you?</h2>
+    <div className="glass-card rounded-2xl p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide">Select Player</h2>
         {showPicker && currentPlayer && (
           <button
             onClick={() => setShowPicker(false)}
-            className="text-sm text-gray-400 hover:text-white"
+            className="text-sm text-slate-500 hover:text-slate-300 transition-colors"
           >
             Cancel
           </button>
         )}
       </div>
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-3 gap-3">
         {PLAYERS.map((player) => (
           <button
             key={player}
             onClick={() => handleSelect(player, compact || false)}
-            className={`px-4 py-2 rounded-lg capitalize transition-colors ${
+            className={`px-4 py-3 rounded-xl capitalize font-medium text-sm transition-all ${
               currentPlayer === player
-                ? 'bg-green-600 text-white'
-                : 'bg-gray-700 hover:bg-gray-600'
+                ? 'btn-accent'
+                : 'btn-secondary'
             }`}
           >
             {player}
