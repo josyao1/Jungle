@@ -107,9 +107,9 @@ export default function LeaderboardPage() {
 
   return (
     <div className="space-y-8">
-      <h1 className="text-2xl font-bold text-center">Leaderboard</h1>
+      <h1 className="text-xl md:text-2xl font-bold text-center">Leaderboard</h1>
 
-      <div className="glass-card rounded-2xl overflow-hidden">
+      <div className="glass-card rounded-2xl overflow-x-auto mobile-scroll">
         <table className="glass-table">
           <thead>
             <tr className="bg-white/[0.02]">
@@ -162,31 +162,33 @@ export default function LeaderboardPage() {
                 </tr>
                 {expandedPlayer === entry.player && entry.games.length > 0 && (
                   <tr key={`${entry.player}-expanded`}>
-                    <td colSpan={7} className="bg-white/[0.02] px-6 py-4">
+                    <td colSpan={7} className="bg-white/[0.02] px-3 md:px-6 py-4">
                       <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">
                         Game Breakdown
                       </div>
-                      <div className="grid grid-cols-4 gap-3">
-                        {GAMES.map(g => {
-                          const gameScore = entry.games.find(gs => gs.game_number === g.number)
-                          return (
-                            <div key={g.number} className="glass-card rounded-xl p-4">
-                              <div className="text-xs text-slate-500 mb-2">Week {g.number}</div>
-                              {gameScore ? (
-                                <>
-                                  <div className="text-xl font-bold stat-value">{gameScore.total_points}</div>
-                                  <div className="text-xs text-slate-500 mt-1">
-                                    <span className="stat-positive">{gameScore.correct_picks}W</span>
-                                    {' '}
-                                    <span className="stat-negative">{gameScore.missed_picks}L</span>
-                                  </div>
-                                </>
-                              ) : (
-                                <div className="text-slate-600">—</div>
-                              )}
-                            </div>
-                          )
-                        })}
+                      <div className="overflow-x-auto mobile-scroll -mx-3 px-3 md:mx-0 md:px-0">
+                        <div className="flex md:grid md:grid-cols-4 gap-3 min-w-max md:min-w-0">
+                          {GAMES.map(g => {
+                            const gameScore = entry.games.find(gs => gs.game_number === g.number)
+                            return (
+                              <div key={g.number} className="glass-card rounded-xl p-3 md:p-4 w-28 md:w-auto flex-shrink-0 md:flex-shrink">
+                                <div className="text-xs text-slate-500 mb-2">Week {g.number}</div>
+                                {gameScore ? (
+                                  <>
+                                    <div className="text-lg md:text-xl font-bold stat-value">{gameScore.total_points}</div>
+                                    <div className="text-xs text-slate-500 mt-1">
+                                      <span className="stat-positive">{gameScore.correct_picks}W</span>
+                                      {' '}
+                                      <span className="stat-negative">{gameScore.missed_picks}L</span>
+                                    </div>
+                                  </>
+                                ) : (
+                                  <div className="text-slate-600">—</div>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
                       </div>
                     </td>
                   </tr>
@@ -197,9 +199,9 @@ export default function LeaderboardPage() {
         </table>
       </div>
 
-      <div className="glass-card rounded-2xl p-6">
+      <div className="glass-card rounded-2xl p-4 md:p-6">
         <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-4">Scoring</h2>
-        <div className="grid grid-cols-2 gap-4 text-sm">
+        <div className="grid grid-cols-2 gap-3 md:gap-4 text-sm">
           <div className="flex justify-between">
             <span className="text-slate-500">Correct Over</span>
             <span className="stat-positive font-medium">+1</span>

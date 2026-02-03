@@ -11,6 +11,7 @@ import { calculateAveragedLine } from '@/lib/utils'
 export default function PickPage() {
   const [player, setPlayer] = useState<Player | null>(null)
   const [gameId, setGameId] = useState<string | null>(null)
+  const [selectedWeek, setSelectedWeek] = useState<number>(1)
   const [lines, setLines] = useState<Line[]>([])
   const [picks, setPicks] = useState<Record<string, Record<string, boolean>>>({})
   const [propPicks, setPropPicks] = useState<Record<string, string>>({})
@@ -18,7 +19,7 @@ export default function PickPage() {
   const [saving, setSaving] = useState(false)
   const [phase, setPhase] = useState<string>('lines_open')
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (weekNum?: number) => {
     const savedPlayer = localStorage.getItem('jungle_player') as Player | null
     if (!savedPlayer) {
       setLoading(false)
@@ -32,23 +33,28 @@ export default function PickPage() {
       return now < gameEnd
     }) || GAMES[GAMES.length - 1]
 
-    const currentPhase = getGamePhase(currentGame)
+    const gameToLoad = weekNum ? GAMES.find(g => g.number === weekNum) || currentGame : currentGame
+    if (!weekNum) {
+      setSelectedWeek(currentGame.number)
+    }
+
+    const currentPhase = getGamePhase(gameToLoad)
     setPhase(currentPhase)
 
     let { data: games } = await supabase
       .from('games')
       .select('id')
-      .eq('game_number', currentGame.number)
+      .eq('game_number', gameToLoad.number)
       .single()
 
     if (!games) {
       const { data: newGame } = await supabase
         .from('games')
         .insert({
-          game_number: currentGame.number,
-          game_date: currentGame.date.toISOString(),
-          lines_lock_time: currentGame.lockTime.toISOString(),
-          picks_lock_time: currentGame.lockTime.toISOString(),
+          game_number: gameToLoad.number,
+          game_date: gameToLoad.date.toISOString(),
+          lines_lock_time: gameToLoad.lockTime.toISOString(),
+          picks_lock_time: gameToLoad.lockTime.toISOString(),
           status: 'upcoming'
         })
         .select('id')
@@ -113,6 +119,12 @@ export default function PickPage() {
 
     setLoading(false)
   }, [])
+
+  const handleWeekChange = (weekNum: number) => {
+    setSelectedWeek(weekNum)
+    setLoading(true)
+    loadData(weekNum)
+  }
 
   const calculateAndSaveLines = async (gId: string) => {
     const { data: predictions } = await supabase
@@ -239,11 +251,30 @@ export default function PickPage() {
 
   const isLocked = phase === 'locked'
 
+  const now = new Date()
+  const currentGameNum = (GAMES.find(g => {
+    const gameEnd = new Date(g.date.getTime() + 3 * 60 * 60 * 1000)
+    return now < gameEnd
+  }) || GAMES[GAMES.length - 1]).number
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Make Picks</h1>
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h1 className="text-xl md:text-2xl font-bold">Make Picks - Week {selectedWeek}</h1>
         <PlayerSelect onSelect={setPlayer} selected={player} compact />
+      </div>
+
+      <div className="week-selector">
+        {GAMES.map(g => (
+          <button
+            key={g.number}
+            onClick={() => handleWeekChange(g.number)}
+            className={`week-btn ${selectedWeek === g.number ? 'active' : ''}`}
+          >
+            Week {g.number}
+            {g.number === currentGameNum && <span className="ml-1 text-xs opacity-75">(Current)</span>}
+          </button>
+        ))}
       </div>
 
       {!isLocked && (
@@ -268,13 +299,13 @@ export default function PickPage() {
         </div>
       )}
 
-      <div className="glass-card rounded-2xl p-6">
+      <div className="glass-card rounded-2xl p-4 md:p-6">
         <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-2">Line Picks</h2>
         <p className="text-slate-500 text-sm mb-4">
           Tap to bet on the over. Support the squad!
         </p>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto mobile-scroll -mx-4 px-4 md:mx-0 md:px-0">
           <table className="glass-table">
             <thead>
               <tr>
@@ -297,7 +328,7 @@ export default function PickPage() {
                         <button
                           onClick={() => !isLocked && togglePick(targetPlayer, stat)}
                           disabled={isLocked}
-                          className={`w-14 h-10 rounded-lg text-sm font-medium transition-all pick-btn ${
+                          className={`w-12 md:w-14 h-10 rounded-lg text-sm font-medium transition-all pick-btn ${
                             isPicked ? 'selected' : ''
                           } disabled:opacity-50`}
                         >
@@ -318,14 +349,14 @@ export default function PickPage() {
         </div>
       </div>
 
-      <div className="glass-card rounded-2xl p-6">
+      <div className="glass-card rounded-2xl p-4 md:p-6">
         <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-4">Prop Bets</h2>
 
         <div className="space-y-6">
           {PROP_BETS.map(prop => (
             <div key={prop}>
               <h3 className="text-sm text-slate-300 mb-3">{PROP_BET_LABELS[prop]}</h3>
-              <div className="grid grid-cols-6 gap-2">
+              <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
                 {PLAYERS.map(p => (
                   <button
                     key={p}

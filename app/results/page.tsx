@@ -12,6 +12,7 @@ export default function ResultsPage() {
   const [player, setPlayer] = useState<Player | null>(null)
   const [gameId, setGameId] = useState<string | null>(null)
   const [gameNumber, setGameNumber] = useState<number>(1)
+  const [selectedWeek, setSelectedWeek] = useState<number>(1)
   const [results, setResults] = useState<Record<string, Record<string, string>>>({})
   const [propResults, setPropResults] = useState<Record<string, string[]>>({})
   const [loading, setLoading] = useState(true)
@@ -29,7 +30,7 @@ export default function ResultsPage() {
     setResults(initial)
   }, [])
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (weekNum?: number) => {
     const savedPlayer = localStorage.getItem('jungle_player') as Player | null
     setPlayer(savedPlayer)
 
@@ -39,12 +40,16 @@ export default function ResultsPage() {
       return now < gameEnd
     }) || GAMES[GAMES.length - 1]
 
-    setGameNumber(currentGame.number)
+    const gameToLoad = weekNum ? GAMES.find(g => g.number === weekNum) || currentGame : currentGame
+    if (!weekNum) {
+      setSelectedWeek(currentGame.number)
+    }
+    setGameNumber(gameToLoad.number)
 
     const { data: games } = await supabase
       .from('games')
       .select('id')
-      .eq('game_number', currentGame.number)
+      .eq('game_number', gameToLoad.number)
       .single()
 
     if (!games) {
@@ -92,6 +97,13 @@ export default function ResultsPage() {
     setCalculated(!!(scores && scores.length > 0))
     setLoading(false)
   }, [])
+
+  const handleWeekChange = (weekNum: number) => {
+    setSelectedWeek(weekNum)
+    setGameNumber(weekNum)
+    setLoading(true)
+    loadData(weekNum)
+  }
 
   useEffect(() => {
     loadData()
@@ -239,11 +251,30 @@ export default function ResultsPage() {
     )
   }
 
+  const now = new Date()
+  const currentGameNum = (GAMES.find(g => {
+    const gameEnd = new Date(g.date.getTime() + 3 * 60 * 60 * 1000)
+    return now < gameEnd
+  }) || GAMES[GAMES.length - 1]).number
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Enter Results - Game {gameNumber}</h1>
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h1 className="text-xl md:text-2xl font-bold">Enter Results - Game {gameNumber}</h1>
         <PlayerSelect onSelect={setPlayer} selected={player} compact />
+      </div>
+
+      <div className="week-selector">
+        {GAMES.map(g => (
+          <button
+            key={g.number}
+            onClick={() => handleWeekChange(g.number)}
+            className={`week-btn ${selectedWeek === g.number ? 'active' : ''}`}
+          >
+            Week {g.number}
+            {g.number === currentGameNum && <span className="ml-1 text-xs opacity-75">(Current)</span>}
+          </button>
+        ))}
       </div>
 
       {calculated && (
@@ -252,11 +283,11 @@ export default function ResultsPage() {
         </div>
       )}
 
-      <div className="glass-card rounded-2xl p-6">
+      <div className="glass-card rounded-2xl p-4 md:p-6">
         <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-2">Stat Results</h2>
         <p className="text-slate-500 text-sm mb-4">Leave blank if not tracked</p>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto mobile-scroll -mx-4 px-4 md:mx-0 md:px-0">
           <table className="glass-table">
             <thead>
               <tr>
@@ -278,7 +309,7 @@ export default function ResultsPage() {
                         placeholder="—"
                         value={results[targetPlayer]?.[stat] ?? ''}
                         onChange={(e) => handleChange(targetPlayer, stat, e.target.value)}
-                        className="w-14 px-2 py-2 glass-input rounded-lg text-center"
+                        className="w-12 md:w-14 px-1 md:px-2 py-2 glass-input rounded-lg text-center text-sm"
                       />
                     </td>
                   ))}
@@ -289,7 +320,7 @@ export default function ResultsPage() {
         </div>
       </div>
 
-      <div className="glass-card rounded-2xl p-6">
+      <div className="glass-card rounded-2xl p-4 md:p-6">
         <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-2">Prop Results</h2>
         <p className="text-slate-500 text-sm mb-4">Select multiple for ties</p>
 
@@ -297,7 +328,7 @@ export default function ResultsPage() {
           {PROP_BETS.map(prop => (
             <div key={prop}>
               <h3 className="text-sm text-slate-300 mb-3">{PROP_BET_LABELS[prop]}</h3>
-              <div className="grid grid-cols-6 gap-2">
+              <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
                 {PLAYERS.map(p => (
                   <button
                     key={p}
