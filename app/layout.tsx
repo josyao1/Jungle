@@ -23,6 +23,7 @@ export default function RootLayout({
                 <a href="/pick" className="hover:text-green-400">Pick</a>
                 <a href="/results" className="hover:text-green-400">Results</a>
                 <a href="/leaderboard" className="hover:text-green-400">Leaderboard</a>
+                <a href="/stats" className="hover:text-green-400">Stats</a>
               </div>
             </div>
           </div>

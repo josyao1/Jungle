@@ -13,7 +13,7 @@ export default function ResultsPage() {
   const [gameId, setGameId] = useState<string | null>(null)
   const [gameNumber, setGameNumber] = useState<number>(1)
   const [results, setResults] = useState<Record<string, Record<string, string>>>({})
-  const [propResults, setPropResults] = useState<Record<string, string>>({})
+  const [propResults, setPropResults] = useState<Record<string, string[]>>({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [calculated, setCalculated] = useState(false)
@@ -78,9 +78,10 @@ export default function ResultsPage() {
       .eq('game_id', games.id)
 
     if (existingPropResults) {
-      const loaded: Record<string, string> = {}
+      const loaded: Record<string, string[]> = {}
       existingPropResults.forEach(p => {
-        loaded[p.prop_type] = p.winner
+        // Winners stored as comma-separated string for ties
+        loaded[p.prop_type] = p.winner.split(',').map((w: string) => w.trim())
       })
       setPropResults(loaded)
     }
@@ -111,10 +112,14 @@ export default function ResultsPage() {
   }
 
   const handlePropResult = (propType: string, winner: string) => {
-    setPropResults(prev => ({
-      ...prev,
-      [propType]: winner,
-    }))
+    setPropResults(prev => {
+      const current = prev[propType] || []
+      // Toggle: add if not present, remove if present
+      const updated = current.includes(winner)
+        ? current.filter(w => w !== winner)
+        : [...current, winner]
+      return { ...prev, [propType]: updated }
+    })
   }
 
   const handleSubmit = async () => {
@@ -155,13 +160,13 @@ export default function ResultsPage() {
         .insert(resultsToInsert)
     }
 
-    // Save prop results
+    // Save prop results (join array for ties)
     const propResultsToInsert = Object.entries(propResults)
-      .filter(([, winner]) => winner)
-      .map(([propType, winner]) => ({
+      .filter(([, winners]) => winners && winners.length > 0)
+      .map(([propType, winners]) => ({
         game_id: gameId,
         prop_type: propType,
-        winner: winner,
+        winner: winners.join(','),
       }))
 
     if (propResultsToInsert.length > 0) {
@@ -229,13 +234,22 @@ export default function ResultsPage() {
       total_points: score.totalPoints,
     }))
 
+    // Delete old scores first for clean recalculation
     await supabase
       .from('scores')
-      .upsert(scoresToInsert, { onConflict: 'game_id,player' })
+      .delete()
+      .eq('game_id', gameId)
+
+    // Insert fresh scores
+    if (scoresToInsert.length > 0) {
+      await supabase
+        .from('scores')
+        .insert(scoresToInsert)
+    }
 
     setCalculated(true)
     setSaving(false)
-    alert('Scores calculated and saved!')
+    alert('Scores recalculated!')
   }
 
   if (loading) {
@@ -308,7 +322,8 @@ export default function ResultsPage() {
       </div>
 
       <div className="bg-gray-800 rounded-lg p-4">
-        <h2 className="text-lg font-semibold mb-3">Prop Results</h2>
+        <h2 className="text-lg font-semibold mb-2">Prop Results</h2>
+        <p className="text-gray-400 text-sm mb-3">Select multiple for ties</p>
 
         <div className="space-y-4">
           {PROP_BETS.map(prop => (
@@ -320,7 +335,7 @@ export default function ResultsPage() {
                     key={p}
                     onClick={() => handlePropResult(prop, p)}
                     className={`px-2 py-2 rounded text-xs capitalize transition-colors ${
-                      propResults[prop] === p
+                      propResults[prop]?.includes(p)
                         ? 'bg-yellow-600 text-white'
                         : 'bg-gray-700 hover:bg-gray-600'
                     }`}
@@ -347,7 +362,7 @@ export default function ResultsPage() {
           disabled={saving}
           className="flex-1 py-3 bg-green-600 hover:bg-green-700 rounded-lg font-medium transition-colors disabled:opacity-50"
         >
-          {saving ? 'Calculating...' : 'Calculate Scores'}
+          {saving ? 'Calculating...' : calculated ? 'Recalculate Scores' : 'Calculate Scores'}
         </button>
       </div>
     </div>

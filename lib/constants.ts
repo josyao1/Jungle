@@ -13,12 +13,12 @@ export const STAT_LABELS: Record<Stat, string> = {
 }
 
 // Prop bets - automatically set up for each game
-export const PROP_BETS = ['most_missed_ft', 'defensive_liability'] as const
+export const PROP_BETS = ['most_missed_ft', 'team_mvp'] as const
 export type PropBet = typeof PROP_BETS[number]
 
 export const PROP_BET_LABELS: Record<PropBet, string> = {
   most_missed_ft: 'Most Missed FTs',
-  defensive_liability: 'Biggest Defensive Liability',
+  team_mvp: 'Team MVP',
 }
 
 // Game dates - all at 5pm CST (UTC-6 = 11pm UTC)
@@ -50,9 +50,12 @@ export function getCurrentGame() {
   const now = new Date()
   // Find the current or next upcoming game
   for (const game of GAMES) {
-    // Game is still relevant if it hasn't been completed (give 3 hours after start for results)
-    const gameEndBuffer = new Date(game.date.getTime() + 3 * 60 * 60 * 1000)
-    if (now < gameEndBuffer) {
+    // Game is still relevant until 8am the next morning (gives time to enter results)
+    const nextMorning = new Date(game.date)
+    nextMorning.setDate(nextMorning.getDate() + 1) // next day
+    nextMorning.setUTCHours(14, 0, 0, 0) // 8am CST = 14:00 UTC
+
+    if (now < nextMorning) {
       return game
     }
   }

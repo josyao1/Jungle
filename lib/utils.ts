@@ -99,12 +99,16 @@ export function calculateScores(
     scores.set(pick.picker, current)
   })
 
-  // Calculate exact line bonus
+  // Calculate exact line bonus (only if both prediction and result exist and have real values)
   predictions.forEach(pred => {
     const key = `${pred.player}-${pred.stat}`
     const result = resultMap.get(key)
 
-    if (result === undefined) return
+    // Skip if no result entered (blank/not tracked)
+    if (result === undefined || result === null) return
+
+    // Skip if prediction was blank (value of 0 is valid, but we need an actual prediction)
+    if (pred.value === undefined || pred.value === null) return
 
     const current = scores.get(pred.submitter) || { correctPicks: 0, missedPicks: 0, exactLines: 0, propWins: 0, propMisses: 0, totalPoints: 0 }
 
@@ -117,13 +121,15 @@ export function calculateScores(
     scores.set(pred.submitter, current)
   })
 
-  // Calculate prop bet scores (no penalty for misses)
+  // Calculate prop bet scores (no penalty for misses, ties count for all winners)
   propPicks.forEach(prop => {
     const current = scores.get(prop.picker) || { correctPicks: 0, missedPicks: 0, exactLines: 0, propWins: 0, propMisses: 0, totalPoints: 0 }
 
-    const winner = propResults[prop.prop_type]
-    if (winner) {
-      if (prop.player_picked === winner) {
+    const winnerStr = propResults[prop.prop_type]
+    if (winnerStr) {
+      // Winners stored as comma-separated for ties
+      const winners = winnerStr.split(',').map(w => w.trim())
+      if (winners.includes(prop.player_picked)) {
         current.propWins++
         current.totalPoints += 1
       }
