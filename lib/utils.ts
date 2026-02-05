@@ -115,7 +115,7 @@ export function calculateScores(
     // Exact match bonus
     if (pred.value === result) {
       current.exactLines++
-      current.totalPoints += 1
+      current.totalPoints += 0.5
     }
 
     scores.set(pred.submitter, current)
@@ -131,7 +131,7 @@ export function calculateScores(
       const winners = winnerStr.split(',').map(w => w.trim())
       if (winners.includes(prop.player_picked)) {
         current.propWins++
-        current.totalPoints += 1
+        current.totalPoints += 2
       }
       // No penalty for wrong prop picks
     }
