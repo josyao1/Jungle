@@ -199,7 +199,19 @@ body {
   color: #22c55e;
 }
 
-.pick-btn:not(.selected):hover {
+.pick-btn.pick-correct {
+  background: rgba(34, 197, 94, 0.25);
+  border-color: #22c55e;
+  color: #22c55e;
+}
+
+.pick-btn.pick-incorrect {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+.pick-btn:not(.selected):not(.pick-correct):not(.pick-incorrect):hover {
   background: rgba(255, 255, 255, 0.05);
   border-color: rgba(255, 255, 255, 0.1);
 }

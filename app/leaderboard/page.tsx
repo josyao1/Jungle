@@ -212,11 +212,11 @@ export default function LeaderboardPage() {
           </div>
           <div className="flex justify-between">
             <span className="text-slate-500">Exact Line</span>
-            <span className="stat-value font-medium">+1</span>
+            <span className="stat-value font-medium">+0.5</span>
           </div>
           <div className="flex justify-between">
             <span className="text-slate-500">Correct Prop</span>
-            <span className="stat-value font-medium">+1</span>
+            <span className="stat-value font-medium">+2</span>
           </div>
         </div>
       </div>

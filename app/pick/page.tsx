@@ -18,6 +18,11 @@ export default function PickPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [phase, setPhase] = useState<string>('lines_open')
+  const [results, setResults] = useState<Array<{ player: string; stat: string; value: number }>>([])
+  const [userPredictions, setUserPredictions] = useState<Array<{ player: string; stat: string; value: number }>>([])
+  const [autoPickedCells, setAutoPickedCells] = useState<Array<{ player: string; stat: string }>>([])
+  const [showAutoPickAlert, setShowAutoPickAlert] = useState(false)
+  const [autoPickDisabled, setAutoPickDisabled] = useState(false)
 
   const loadData = useCallback(async (weekNum?: number) => {
     const savedPlayer = localStorage.getItem('jungle_player') as Player | null
@@ -76,32 +81,60 @@ export default function PickPage() {
 
     setLines(liveLines || [])
 
+    // Fetch results for correct/incorrect display on past picks
+    const { data: gameResults } = await supabase
+      .from('results')
+      .select('*')
+      .eq('game_id', games.id)
+    setResults(gameResults || [])
+
+    // Fetch user's line predictions for auto-pick logic
+    const { data: userPreds } = await supabase
+      .from('line_predictions')
+      .select('*')
+      .eq('game_id', games.id)
+      .eq('submitter', savedPlayer)
+    setUserPredictions(userPreds || [])
+
     const { data: existingPicks } = await supabase
       .from('picks')
       .select('*')
       .eq('game_id', games.id)
       .eq('picker', savedPlayer)
 
-    if (existingPicks) {
-      const loaded: Record<string, Record<string, boolean>> = {}
+    // Load existing picks or start fresh
+    const picksMap: Record<string, Record<string, boolean>> = {}
+    PLAYERS.forEach(p => {
+      picksMap[p] = {}
+      STATS.forEach(s => {
+        const pick = existingPicks?.find(pk => pk.player === p && pk.stat === s)
+        picksMap[p][s] = pick?.picked || false
+      })
+    })
+
+    // Auto-pick on every load: if aggregated line < user's prediction, pick it
+    // Never un-pick something already chosen
+    const autoPickOff = localStorage.getItem(`jungle_autopick_off_week_${gameToLoad.number}`)
+    setAutoPickDisabled(!!autoPickOff)
+    const newAutoPicked: Array<{ player: string; stat: string }> = []
+
+    if (!autoPickOff && currentPhase !== 'locked' && userPreds && liveLines) {
       PLAYERS.forEach(p => {
-        loaded[p] = {}
         STATS.forEach(s => {
-          const pick = existingPicks.find(pk => pk.player === p && pk.stat === s)
-          loaded[p][s] = pick?.picked || false
+          if (picksMap[p][s]) return // Already picked, never un-pick
+          const userPred = userPreds.find((pred: any) => pred.player === p && pred.stat === s)
+          const aggLine = (liveLines || []).find((l: any) => l.player === p && l.stat === s)
+          if (userPred && aggLine && aggLine.value < userPred.value) {
+            picksMap[p][s] = true
+            newAutoPicked.push({ player: p, stat: s })
+          }
         })
       })
-      setPicks(loaded)
-    } else {
-      const initial: Record<string, Record<string, boolean>> = {}
-      PLAYERS.forEach(p => {
-        initial[p] = {}
-        STATS.forEach(s => {
-          initial[p][s] = false
-        })
-      })
-      setPicks(initial)
     }
+
+    setPicks(picksMap)
+    setAutoPickedCells(newAutoPicked)
+    setShowAutoPickAlert(newAutoPicked.length > 0)
 
     const { data: existingPropPicks } = await supabase
       .from('prop_picks')
@@ -179,6 +212,34 @@ export default function PickPage() {
     }))
   }
 
+  const handleDismissAutoPick = () => {
+    setShowAutoPickAlert(false)
+  }
+
+  const handleTurnOffAutoPick = () => {
+    // Undo the auto-picked cells
+    setPicks(prev => {
+      const updated = { ...prev }
+      autoPickedCells.forEach(({ player: p, stat: s }) => {
+        updated[p] = { ...updated[p], [s]: false }
+      })
+      return updated
+    })
+    // Remember for this week
+    localStorage.setItem(`jungle_autopick_off_week_${selectedWeek}`, 'true')
+    setAutoPickDisabled(true)
+    setAutoPickedCells([])
+    setShowAutoPickAlert(false)
+  }
+
+  const handleTurnOnAutoPick = () => {
+    localStorage.removeItem(`jungle_autopick_off_week_${selectedWeek}`)
+    setAutoPickDisabled(false)
+    // Re-run load to apply auto-picks
+    setLoading(true)
+    loadData(selectedWeek)
+  }
+
   const handlePropPick = (propType: string, pickedPlayer: string) => {
     setPropPicks(prev => ({
       ...prev,
@@ -251,6 +312,16 @@ export default function PickPage() {
 
   const isLocked = phase === 'locked'
 
+  const getPickResult = (targetPlayer: string, stat: string): 'correct' | 'incorrect' | null => {
+    if (!isLocked) return null
+    const isPicked = picks[targetPlayer]?.[stat]
+    if (!isPicked) return null
+    const line = getLine(targetPlayer, stat)
+    const result = results.find(r => r.player === targetPlayer && r.stat === stat)
+    if (line === null || !result) return null
+    return result.value >= line ? 'correct' : 'incorrect'
+  }
+
   const now = new Date()
   const currentGameNum = (GAMES.find(g => {
     const gameEnd = new Date(g.date.getTime() + 3 * 60 * 60 * 1000)
@@ -299,6 +370,34 @@ export default function PickPage() {
         </div>
       )}
 
+      {showAutoPickAlert && (
+        <div className="glass-card rounded-xl p-4 border-blue-500/30">
+          <p className="text-blue-400 text-sm mb-2">
+            Auto-picked {autoPickedCells.length} over{autoPickedCells.length > 1 ? 's' : ''} where the line is {'>'}1 below your prediction:
+          </p>
+          <p className="text-slate-400 text-xs mb-3 capitalize">
+            {autoPickedCells.map(c => `${c.player} ${STAT_LABELS[c.stat as Stat]}`).join(', ')}
+          </p>
+          <div className="flex gap-2">
+            <button onClick={handleDismissAutoPick} className="btn-secondary px-3 py-1.5 rounded-lg text-xs">
+              Got It
+            </button>
+            <button onClick={handleTurnOffAutoPick} className="btn-secondary px-3 py-1.5 rounded-lg text-xs text-red-400">
+              Turn Off For This Week
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!isLocked && autoPickDisabled && !showAutoPickAlert && (
+        <div className="glass-card rounded-xl p-3 border-slate-500/20 flex items-center justify-between">
+          <p className="text-slate-500 text-xs">Auto-pick is off for this week</p>
+          <button onClick={handleTurnOnAutoPick} className="btn-secondary px-3 py-1 rounded-lg text-xs text-blue-400">
+            Turn On
+          </button>
+        </div>
+      )}
+
       <div className="glass-card rounded-2xl p-4 md:p-6">
         <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-2">Line Picks</h2>
         <p className="text-slate-500 text-sm mb-4">
@@ -322,17 +421,20 @@ export default function PickPage() {
                   {STATS.map(stat => {
                     const line = getLine(targetPlayer, stat)
                     const isPicked = picks[targetPlayer]?.[stat]
+                    const pickResult = getPickResult(targetPlayer, stat)
 
                     return (
                       <td key={stat} className="text-center">
                         <button
                           onClick={() => !isLocked && togglePick(targetPlayer, stat)}
                           disabled={isLocked}
-                          className={`w-12 md:w-14 h-10 rounded-lg text-sm font-medium transition-all pick-btn ${
-                            isPicked ? 'selected' : ''
+                          className={`w-14 md:w-16 h-10 rounded-lg text-sm font-medium transition-all pick-btn ${
+                            pickResult === 'correct' ? 'pick-correct'
+                            : pickResult === 'incorrect' ? 'pick-incorrect'
+                            : isPicked ? 'selected' : ''
                           } disabled:opacity-50`}
                         >
-                          {line !== null ? line : '-'}
+                          {line !== null ? Math.max(0, line - 0.5) : '-'}
                         </button>
                       </td>
                     )
@@ -343,9 +445,17 @@ export default function PickPage() {
           </table>
         </div>
 
-        <div className="mt-4 text-sm text-slate-500 flex items-center gap-2">
-          <span className="inline-block w-3 h-3 border-2 border-green-500 rounded bg-green-500/20"></span>
-          = Picked Over
+        <div className="mt-4 text-sm text-slate-500 flex flex-wrap items-center gap-x-4 gap-y-1">
+          <span className="flex items-center gap-1">
+            <span className="inline-block w-3 h-3 border-2 border-green-500 rounded bg-green-500/20"></span>
+            {isLocked ? '= Hit' : '= Picked Over'}
+          </span>
+          {isLocked && (
+            <span className="flex items-center gap-1">
+              <span className="inline-block w-3 h-3 border-2 border-red-500 rounded bg-red-500/20"></span>
+              = Miss
+            </span>
+          )}
         </div>
       </div>
 
