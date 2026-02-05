@@ -20,6 +20,7 @@ export default function PickPage() {
   const [phase, setPhase] = useState<string>('lines_open')
   const [results, setResults] = useState<Array<{ player: string; stat: string; value: number }>>([])
   const [userPredictions, setUserPredictions] = useState<Array<{ player: string; stat: string; value: number }>>([])
+  const [propResults, setPropResults] = useState<Record<string, string>>({})
   const [autoPickedCells, setAutoPickedCells] = useState<Array<{ player: string; stat: string }>>([])
   const [showAutoPickAlert, setShowAutoPickAlert] = useState(false)
   const [autoPickDisabled, setAutoPickDisabled] = useState(false)
@@ -87,6 +88,17 @@ export default function PickPage() {
       .select('*')
       .eq('game_id', games.id)
     setResults(gameResults || [])
+
+    // Fetch prop results for correct/incorrect display on past picks
+    const { data: gamePropResults } = await supabase
+      .from('prop_results')
+      .select('*')
+      .eq('game_id', games.id)
+    const propResultsMap: Record<string, string> = {}
+    gamePropResults?.forEach((pr: any) => {
+      propResultsMap[pr.prop_type] = pr.winner
+    })
+    setPropResults(propResultsMap)
 
     // Fetch user's line predictions for auto-pick logic
     const { data: userPreds } = await supabase
@@ -322,6 +334,15 @@ export default function PickPage() {
     return result.value >= line ? 'correct' : 'incorrect'
   }
 
+  const getPropPickResult = (propType: string, pickedPlayer: string): 'correct' | 'incorrect' | null => {
+    if (!isLocked) return null
+    if (!propPicks[propType]) return null
+    const winnerStr = propResults[propType]
+    if (!winnerStr) return null
+    const winners = winnerStr.split(',').map(w => w.trim())
+    return winners.includes(pickedPlayer) ? 'correct' : 'incorrect'
+  }
+
   const now = new Date()
   const currentGameNum = (GAMES.find(g => {
     const gameEnd = new Date(g.date.getTime() + 3 * 60 * 60 * 1000)
@@ -467,18 +488,23 @@ export default function PickPage() {
             <div key={prop}>
               <h3 className="text-sm text-slate-300 mb-3">{PROP_BET_LABELS[prop]}</h3>
               <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
-                {PLAYERS.map(p => (
-                  <button
-                    key={p}
-                    onClick={() => !isLocked && handlePropPick(prop, p)}
-                    disabled={isLocked}
-                    className={`px-2 py-3 rounded-lg text-xs capitalize font-medium transition-all pick-btn ${
-                      propPicks[prop] === p ? 'selected' : ''
-                    } disabled:opacity-50`}
-                  >
-                    {p}
-                  </button>
-                ))}
+                {PLAYERS.map(p => {
+                  const propResult = propPicks[prop] === p ? getPropPickResult(prop, p) : null
+                  return (
+                    <button
+                      key={p}
+                      onClick={() => !isLocked && handlePropPick(prop, p)}
+                      disabled={isLocked}
+                      className={`px-2 py-3 rounded-lg text-xs capitalize font-medium transition-all pick-btn ${
+                        propResult === 'correct' ? 'pick-correct'
+                        : propResult === 'incorrect' ? 'pick-incorrect'
+                        : propPicks[prop] === p ? 'selected' : ''
+                      } disabled:opacity-50`}
+                    >
+                      {p}
+                    </button>
+                  )
+                })}
               </div>
             </div>
           ))}
