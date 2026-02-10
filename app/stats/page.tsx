@@ -21,7 +21,9 @@ type SortDirection = 'asc' | 'desc'
 
 export default function StatsPage() {
   const [mode, setMode] = useState<'total' | 'perGame'>('total')
+  const [selectedWeek, setSelectedWeek] = useState<number | 'all'>('all')
   const [playerStats, setPlayerStats] = useState<PlayerStats[]>([])
+  const [weeklyStats, setWeeklyStats] = useState<Map<number, PlayerStats[]>>(new Map())
   const [weeklyMVPs, setWeeklyMVPs] = useState<WeeklyMVP[]>([])
   const [loading, setLoading] = useState(true)
   const [sortColumn, setSortColumn] = useState<SortColumn>('player')
@@ -40,6 +42,7 @@ export default function StatsPage() {
     }
 
     const gameMap = new Map(games?.map(g => [g.id, g.game_number]) || [])
+    const gameIdMap = new Map(games?.map(g => [g.game_number, g.id]) || [])
     const mvps: WeeklyMVP[] = GAMES.map(g => {
       const propResult = propResults?.find(pr => {
         const gameNum = gameMap.get(pr.game_id)
@@ -52,16 +55,17 @@ export default function StatsPage() {
     })
     setWeeklyMVPs(mvps)
 
+    // Aggregate season totals
     const aggregated: PlayerStats[] = PLAYERS.map(player => {
       const statsObj: Record<string, { total: number; games: number; perGame: number }> = {}
 
       STATS.forEach(stat => {
         const playerResults = results.filter(r => r.player === player && r.stat === stat)
         const total = playerResults.reduce((sum, r) => sum + (r.value || 0), 0)
-        const games = playerResults.length
-        const perGame = games > 0 ? Math.round((total / games) * 10) / 10 : 0
+        const gamesCount = playerResults.length
+        const perGame = gamesCount > 0 ? Math.round((total / gamesCount) * 10) / 10 : 0
 
-        statsObj[stat] = { total, games, perGame }
+        statsObj[stat] = { total, games: gamesCount, perGame }
       })
 
       return {
@@ -71,6 +75,34 @@ export default function StatsPage() {
     })
 
     setPlayerStats(aggregated)
+
+    // Aggregate per-week stats
+    const weeklyMap = new Map<number, PlayerStats[]>()
+    GAMES.forEach(g => {
+      const gameId = gameIdMap.get(g.number)
+      if (!gameId) return
+
+      const weekStats: PlayerStats[] = PLAYERS.map(player => {
+        const statsObj: Record<string, { total: number; games: number; perGame: number }> = {}
+
+        STATS.forEach(stat => {
+          const playerResults = results.filter(r =>
+            r.player === player && r.stat === stat && gameMap.get(r.game_id) === g.number
+          )
+          const total = playerResults.reduce((sum, r) => sum + (r.value || 0), 0)
+          statsObj[stat] = { total, games: playerResults.length > 0 ? 1 : 0, perGame: total }
+        })
+
+        return {
+          player,
+          stats: statsObj as Record<Stat, { total: number; games: number; perGame: number }>
+        }
+      })
+
+      weeklyMap.set(g.number, weekStats)
+    })
+
+    setWeeklyStats(weeklyMap)
     setLoading(false)
   }, [])
 
@@ -87,13 +119,17 @@ export default function StatsPage() {
     }
   }
 
-  const sortedStats = [...playerStats].sort((a, b) => {
+  const displayStats = selectedWeek === 'all'
+    ? playerStats
+    : weeklyStats.get(selectedWeek) || []
+
+  const sortedStats = [...displayStats].sort((a, b) => {
     let comparison = 0
     if (sortColumn === 'player') {
       comparison = a.player.localeCompare(b.player)
     } else {
-      const aVal = mode === 'total' ? a.stats[sortColumn].total : a.stats[sortColumn].perGame
-      const bVal = mode === 'total' ? b.stats[sortColumn].total : b.stats[sortColumn].perGame
+      const aVal = mode === 'total' || selectedWeek !== 'all' ? a.stats[sortColumn].total : a.stats[sortColumn].perGame
+      const bVal = mode === 'total' || selectedWeek !== 'all' ? b.stats[sortColumn].total : b.stats[sortColumn].perGame
       comparison = aVal - bVal
     }
     return sortDirection === 'asc' ? comparison : -comparison
@@ -113,21 +149,43 @@ export default function StatsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-xl md:text-2xl font-bold">Season Stats</h1>
-        <div className="toggle-group">
+        <h1 className="text-xl md:text-2xl font-bold">
+          {selectedWeek === 'all' ? 'Season Stats' : `Week ${selectedWeek} Stats`}
+        </h1>
+        {selectedWeek === 'all' && (
+          <div className="toggle-group">
+            <button
+              onClick={() => setMode('total')}
+              className={`toggle-btn ${mode === 'total' ? 'active' : ''}`}
+            >
+              Total
+            </button>
+            <button
+              onClick={() => setMode('perGame')}
+              className={`toggle-btn ${mode === 'perGame' ? 'active' : ''}`}
+            >
+              Per Game
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="week-selector">
+        <button
+          onClick={() => setSelectedWeek('all')}
+          className={`week-btn ${selectedWeek === 'all' ? 'active' : ''}`}
+        >
+          Season
+        </button>
+        {GAMES.map(g => (
           <button
-            onClick={() => setMode('total')}
-            className={`toggle-btn ${mode === 'total' ? 'active' : ''}`}
+            key={g.number}
+            onClick={() => setSelectedWeek(g.number)}
+            className={`week-btn ${selectedWeek === g.number ? 'active' : ''}`}
           >
-            Total
+            Week {g.number}
           </button>
-          <button
-            onClick={() => setMode('perGame')}
-            className={`toggle-btn ${mode === 'perGame' ? 'active' : ''}`}
-          >
-            Per Game
-          </button>
-        </div>
+        ))}
       </div>
 
       <div className="glass-card rounded-2xl overflow-x-auto mobile-scroll">
@@ -158,9 +216,11 @@ export default function StatsPage() {
                 {STATS.map(stat => (
                   <td key={stat} className="text-center">
                     <span className="font-medium stat-value">
-                      {mode === 'total' ? stats[stat].total : stats[stat].perGame}
+                      {selectedWeek === 'all'
+                        ? (mode === 'total' ? stats[stat].total : stats[stat].perGame)
+                        : stats[stat].total}
                     </span>
-                    {mode === 'perGame' && stats[stat].games > 0 && (
+                    {selectedWeek === 'all' && mode === 'perGame' && stats[stat].games > 0 && (
                       <span className="text-slate-500 text-xs ml-1">
                         ({stats[stat].games}g)
                       </span>
@@ -174,9 +234,11 @@ export default function StatsPage() {
       </div>
 
       <div className="text-slate-500 text-sm">
-        {mode === 'perGame'
-          ? 'Per game averages only include games where the stat was tracked.'
-          : 'Totals across all games played this season.'}
+        {selectedWeek === 'all'
+          ? (mode === 'perGame'
+            ? 'Per game averages only include games where the stat was tracked.'
+            : 'Totals across all games played this season.')
+          : `Stats from Week ${selectedWeek}.`}
       </div>
 
       <div className="glass-card rounded-2xl p-4 md:p-6">
