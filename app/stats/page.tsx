@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback } from 'react'
-import { PLAYERS, STATS, STAT_LABELS, GAMES, Player, Stat } from '@/lib/constants'
+import { PLAYERS, STATS, STAT_LABELS, GAMES, Player, Stat, isPlayerInjured } from '@/lib/constants'
 import { supabase } from '@/lib/supabase'
 
 interface PlayerStats {
@@ -210,9 +210,14 @@ export default function StatsPage() {
             </tr>
           </thead>
           <tbody>
-            {sortedStats.map(({ player, stats }) => (
-              <tr key={player}>
-                <td className="capitalize font-medium">{player}</td>
+            {sortedStats.map(({ player, stats }) => {
+              const injured = isPlayerInjured(player as Player)
+              return (
+              <tr key={player} className={injured ? 'player-injured' : ''}>
+                <td className="capitalize font-medium">
+                  {player}
+                  {injured && <span className="badge badge-ir ml-2">IR</span>}
+                </td>
                 {STATS.map(stat => (
                   <td key={stat} className="text-center">
                     <span className="font-medium stat-value">
@@ -228,7 +233,7 @@ export default function StatsPage() {
                   </td>
                 ))}
               </tr>
-            ))}
+            )})}
           </tbody>
         </table>
       </div>

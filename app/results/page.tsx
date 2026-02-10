@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback } from 'react'
-import { PLAYERS, STATS, STAT_LABELS, PROP_BETS, PROP_BET_LABELS, GAMES, Player, Stat } from '@/lib/constants'
+import { PLAYERS, STATS, STAT_LABELS, PROP_BETS, PROP_BET_LABELS, GAMES, Player, Stat, isPlayerInjured } from '@/lib/constants'
 import PlayerSelect from '@/components/PlayerSelect'
 import { supabase, Result, Line, Pick, PropPick } from '@/lib/supabase'
 import { calculateScores } from '@/lib/utils'
@@ -298,23 +298,33 @@ export default function ResultsPage() {
               </tr>
             </thead>
             <tbody>
-              {PLAYERS.map(targetPlayer => (
-                <tr key={targetPlayer}>
-                  <td className="capitalize font-medium">{targetPlayer}</td>
-                  {STATS.map(stat => (
-                    <td key={stat} className="text-center">
-                      <input
-                        type="number"
-                        min="0"
-                        placeholder="—"
-                        value={results[targetPlayer]?.[stat] ?? ''}
-                        onChange={(e) => handleChange(targetPlayer, stat, e.target.value)}
-                        className="w-12 md:w-14 px-1 md:px-2 py-2 glass-input rounded-lg text-center text-sm"
-                      />
+              {PLAYERS.map(targetPlayer => {
+                const injured = isPlayerInjured(targetPlayer)
+                return (
+                  <tr key={targetPlayer} className={injured ? 'player-injured' : ''}>
+                    <td className="capitalize font-medium">
+                      {targetPlayer}
+                      {injured && <span className="badge badge-ir ml-2">IR</span>}
                     </td>
-                  ))}
-                </tr>
-              ))}
+                    {STATS.map(stat => (
+                      <td key={stat} className="text-center">
+                        {injured ? (
+                          <span className="text-slate-600">—</span>
+                        ) : (
+                          <input
+                            type="number"
+                            min="0"
+                            placeholder="—"
+                            value={results[targetPlayer]?.[stat] ?? ''}
+                            onChange={(e) => handleChange(targetPlayer, stat, e.target.value)}
+                            className="w-12 md:w-14 px-1 md:px-2 py-2 glass-input rounded-lg text-center text-sm"
+                          />
+                        )}
+                      </td>
+                    ))}
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>

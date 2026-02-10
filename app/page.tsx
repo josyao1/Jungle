@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic'
 import { useState, useEffect, useCallback } from 'react'
 import PlayerSelect from '@/components/PlayerSelect'
 import GameStatus from '@/components/GameStatus'
-import { Player, PLAYERS } from '@/lib/constants'
+import { Player, PLAYERS, isPlayerInjured } from '@/lib/constants'
 import { supabase } from '@/lib/supabase'
 
 export default function Home() {
@@ -57,28 +57,34 @@ export default function Home() {
           <div className="glass-card rounded-2xl p-6">
             <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-4">Standings</h2>
             <div className="space-y-2">
-              {leaderboard.map((entry, i) => (
-                <div
-                  key={entry.player}
-                  className={`flex items-center justify-between p-4 rounded-xl transition-all ${
-                    entry.player === player
-                      ? 'bg-court-accent/10 border border-court-accent/30'
-                      : 'bg-white/[0.02] hover:bg-white/[0.04]'
-                  }`}
-                >
-                  <div className="flex items-center gap-4">
-                    <span className={`w-8 text-center text-lg font-bold ${
-                      i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : 'text-slate-600'
-                    }`}>
-                      {i + 1}
+              {leaderboard.map((entry, i) => {
+                const injured = isPlayerInjured(entry.player as Player)
+                return (
+                  <div
+                    key={entry.player}
+                    className={`flex items-center justify-between p-4 rounded-xl transition-all ${
+                      entry.player === player
+                        ? 'bg-court-accent/10 border border-court-accent/30'
+                        : 'bg-white/[0.02] hover:bg-white/[0.04]'
+                    } ${injured ? 'player-injured' : ''}`}
+                  >
+                    <div className="flex items-center gap-4">
+                      <span className={`w-8 text-center text-lg font-bold ${
+                        i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : 'text-slate-600'
+                      }`}>
+                        {i + 1}
+                      </span>
+                      <span className="capitalize font-medium">
+                        {entry.player}
+                        {injured && <span className="badge badge-ir ml-2">IR</span>}
+                      </span>
+                    </div>
+                    <span className={`text-xl font-bold ${i === 0 ? 'stat-value' : 'text-slate-400'}`}>
+                      {entry.total}
                     </span>
-                    <span className="capitalize font-medium">{entry.player}</span>
                   </div>
-                  <span className={`text-xl font-bold ${i === 0 ? 'stat-value' : 'text-slate-400'}`}>
-                    {entry.total}
-                  </span>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </div>
 

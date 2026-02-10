@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback } from 'react'
-import { PLAYERS, STATS, STAT_LABELS, GAMES, getGamePhase, Player, Stat } from '@/lib/constants'
+import { PLAYERS, STATS, STAT_LABELS, GAMES, getGamePhase, Player, Stat, isPlayerInjured } from '@/lib/constants'
 import PlayerSelect from '@/components/PlayerSelect'
 import { supabase } from '@/lib/supabase'
 
@@ -220,25 +220,35 @@ export default function SetLinesPage() {
               </tr>
             </thead>
             <tbody>
-              {PLAYERS.map(targetPlayer => (
-                <tr key={targetPlayer}>
-                  <td className="capitalize font-medium">{targetPlayer}</td>
-                  {STATS.map(stat => (
-                    <td key={stat} className="text-center">
-                      <input
-                        type="number"
-                        min="0"
-                        step="1"
-                        placeholder="-"
-                        value={predictions[targetPlayer]?.[stat] ?? ''}
-                        onChange={(e) => handleChange(targetPlayer, stat, e.target.value)}
-                        disabled={isLocked}
-                        className="w-16 px-2 py-2 glass-input rounded-lg text-center disabled:opacity-50"
-                      />
+              {PLAYERS.map(targetPlayer => {
+                const injured = isPlayerInjured(targetPlayer)
+                return (
+                  <tr key={targetPlayer} className={injured ? 'player-injured' : ''}>
+                    <td className="capitalize font-medium">
+                      {targetPlayer}
+                      {injured && <span className="badge badge-ir ml-2">IR</span>}
                     </td>
-                  ))}
-                </tr>
-              ))}
+                    {STATS.map(stat => (
+                      <td key={stat} className="text-center">
+                        {injured ? (
+                          <span className="text-slate-600">—</span>
+                        ) : (
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            placeholder="-"
+                            value={predictions[targetPlayer]?.[stat] ?? ''}
+                            onChange={(e) => handleChange(targetPlayer, stat, e.target.value)}
+                            disabled={isLocked}
+                            className="w-16 px-2 py-2 glass-input rounded-lg text-center disabled:opacity-50"
+                          />
+                        )}
+                      </td>
+                    ))}
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>

@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback } from 'react'
-import { PLAYERS, STATS, STAT_LABELS, PROP_BETS, PROP_BET_LABELS, GAMES, getGamePhase, Player, Stat, PropBet } from '@/lib/constants'
+import { PLAYERS, STATS, STAT_LABELS, PROP_BETS, PROP_BET_LABELS, GAMES, getGamePhase, Player, Stat, PropBet, isPlayerInjured } from '@/lib/constants'
 import PlayerSelect from '@/components/PlayerSelect'
 import { supabase, Line, Pick, PropPick } from '@/lib/supabase'
 import { calculateAveragedLine } from '@/lib/utils'
@@ -436,32 +436,45 @@ export default function PickPage() {
               </tr>
             </thead>
             <tbody>
-              {PLAYERS.map(targetPlayer => (
-                <tr key={targetPlayer}>
-                  <td className="capitalize font-medium">{targetPlayer}</td>
-                  {STATS.map(stat => {
-                    const line = getLine(targetPlayer, stat)
-                    const isPicked = picks[targetPlayer]?.[stat]
-                    const pickResult = getPickResult(targetPlayer, stat)
+              {PLAYERS.map(targetPlayer => {
+                const injured = isPlayerInjured(targetPlayer)
+                return (
+                  <tr key={targetPlayer} className={injured ? 'player-injured' : ''}>
+                    <td className="capitalize font-medium">
+                      {targetPlayer}
+                      {injured && <span className="badge badge-ir ml-2">IR</span>}
+                    </td>
+                    {STATS.map(stat => {
+                      if (injured) {
+                        return (
+                          <td key={stat} className="text-center">
+                            <span className="text-slate-600">—</span>
+                          </td>
+                        )
+                      }
+                      const line = getLine(targetPlayer, stat)
+                      const isPicked = picks[targetPlayer]?.[stat]
+                      const pickResult = getPickResult(targetPlayer, stat)
 
-                    return (
-                      <td key={stat} className="text-center">
-                        <button
-                          onClick={() => !isLocked && togglePick(targetPlayer, stat)}
-                          disabled={isLocked}
-                          className={`w-14 md:w-16 h-10 rounded-lg text-sm font-medium transition-all pick-btn ${
-                            pickResult === 'correct' ? 'pick-correct'
-                            : pickResult === 'incorrect' ? 'pick-incorrect'
-                            : isPicked ? 'selected' : ''
-                          } disabled:opacity-50`}
-                        >
-                          {line !== null ? Math.max(0, line - 0.5) : '-'}
-                        </button>
-                      </td>
-                    )
-                  })}
-                </tr>
-              ))}
+                      return (
+                        <td key={stat} className="text-center">
+                          <button
+                            onClick={() => !isLocked && togglePick(targetPlayer, stat)}
+                            disabled={isLocked}
+                            className={`w-14 md:w-16 h-10 rounded-lg text-sm font-medium transition-all pick-btn ${
+                              pickResult === 'correct' ? 'pick-correct'
+                              : pickResult === 'incorrect' ? 'pick-incorrect'
+                              : isPicked ? 'selected' : ''
+                            } disabled:opacity-50`}
+                          >
+                            {line !== null ? Math.max(0, line - 0.5) : '-'}
+                          </button>
+                        </td>
+                      )
+                    })}
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
@@ -489,19 +502,20 @@ export default function PickPage() {
               <h3 className="text-sm text-slate-300 mb-3">{PROP_BET_LABELS[prop]}</h3>
               <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
                 {PLAYERS.map(p => {
+                  const injured = isPlayerInjured(p)
                   const propResult = propPicks[prop] === p ? getPropPickResult(prop, p) : null
                   return (
                     <button
                       key={p}
-                      onClick={() => !isLocked && handlePropPick(prop, p)}
-                      disabled={isLocked}
+                      onClick={() => !isLocked && !injured && handlePropPick(prop, p)}
+                      disabled={isLocked || injured}
                       className={`px-2 py-3 rounded-lg text-xs capitalize font-medium transition-all pick-btn ${
                         propResult === 'correct' ? 'pick-correct'
                         : propResult === 'incorrect' ? 'pick-incorrect'
                         : propPicks[prop] === p ? 'selected' : ''
-                      } disabled:opacity-50`}
+                      } ${injured ? 'player-injured' : ''} disabled:opacity-50`}
                     >
-                      {p}
+                      {p}{injured && ' (IR)'}
                     </button>
                   )
                 })}

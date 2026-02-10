@@ -1,6 +1,16 @@
 export const PLAYERS = ['andy', 'andrew', 'josh', 'ronit', 'aarnav', 'pranav'] as const
 export type Player = typeof PLAYERS[number]
 
+// Players on IR (injured reserve) - no lines set for them, shown with injury tag
+export const INJURED_PLAYERS: Player[] = ['andrew']
+
+export function isPlayerInjured(player: Player): boolean {
+  return INJURED_PLAYERS.includes(player)
+}
+
+// Active players for setting lines and picks
+export const ACTIVE_PLAYERS = PLAYERS.filter(p => !INJURED_PLAYERS.includes(p))
+
 export const STATS = ['pts', '3pm', 'ast', 'stl', 'blk'] as const
 export type Stat = typeof STATS[number]
 

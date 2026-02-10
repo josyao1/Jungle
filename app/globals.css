@@ -238,6 +238,17 @@ body {
   color: #ef4444;
 }
 
+.badge-ir {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  font-size: 0.625rem;
+  padding: 2px 6px;
+}
+
+.player-injured {
+  opacity: 0.6;
+}
+
 /* Ranking Colors */
 .rank-1 {
   color: #fbbf24;

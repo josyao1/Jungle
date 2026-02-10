@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback } from 'react'
-import { PLAYERS, GAMES, Player } from '@/lib/constants'
+import { PLAYERS, GAMES, Player, isPlayerInjured } from '@/lib/constants'
 import { supabase } from '@/lib/supabase'
 
 interface GameScore {
@@ -123,11 +123,13 @@ export default function LeaderboardPage() {
             </tr>
           </thead>
           <tbody>
-            {scores.map((entry, i) => (
+            {scores.map((entry, i) => {
+              const injured = isPlayerInjured(entry.player as Player)
+              return (
               <>
                 <tr
                   key={entry.player}
-                  className="cursor-pointer hover:bg-white/[0.03] transition-colors"
+                  className={`cursor-pointer hover:bg-white/[0.03] transition-colors ${injured ? 'player-injured' : ''}`}
                   onClick={() => setExpandedPlayer(
                     expandedPlayer === entry.player ? null : entry.player
                   )}
@@ -141,6 +143,7 @@ export default function LeaderboardPage() {
                   </td>
                   <td className="capitalize font-medium">
                     {entry.player}
+                    {injured && <span className="badge badge-ir ml-2">IR</span>}
                   </td>
                   <td className="text-center stat-positive font-medium">
                     {entry.totalCorrectPicks}
@@ -194,7 +197,7 @@ export default function LeaderboardPage() {
                   </tr>
                 )}
               </>
-            ))}
+            )})}
           </tbody>
         </table>
       </div>
