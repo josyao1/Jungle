@@ -186,6 +186,7 @@ export default function StatsPage() {
             {weeklyMVPs.map(({ week, mvp }) => {
               const mvpSubtext: Record<number, string> = {
                 1: '9-0 run to give us control',
+                2: 'Stat Sheet Stuffer',
               }
               return (
                 <div key={week} className="glass-card rounded-xl p-3 md:p-4 text-center w-32 md:w-auto flex-shrink-0 md:flex-shrink">
@@ -221,10 +222,9 @@ export default function StatsPage() {
             <div className="glass-card rounded-xl p-3 md:p-4 text-center w-36 md:w-auto flex-shrink-0 md:flex-shrink">
               <div className="text-slate-500 text-xs mb-1">Feb 9</div>
               <div className="text-sm font-medium text-slate-300 mb-2">vs Future Doctors</div>
-              <div className="flex items-center justify-center gap-2">
-                <span className="w-4 h-4 rounded-full bg-white border border-slate-600"></span>
-                <span className="text-xs text-slate-500">White</span>
-              </div>
+              <div className="text-xl font-bold stat-positive">W</div>
+              <div className="text-sm text-slate-400 mt-1">25-19</div>
+        
             </div>
 
             {/* Week 3 - Upcoming */}
