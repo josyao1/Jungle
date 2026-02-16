@@ -1,5 +1,5 @@
 // Bettors - people who log in, set lines, and make picks
-export const BETTORS = ['andy', 'andrew', 'josh', 'ronit', 'aarnav', 'pranav'] as const
+export const BETTORS = ['andy', 'andrew', 'josh', 'ronit', 'aarnav', 'pranav', 'vishi'] as const
 export type Bettor = typeof BETTORS[number]
 
 // All players whose stats can be tracked (bettors + non-betting teammates)
