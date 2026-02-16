@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { BETTORS, Player } from '@/lib/constants'
+import { BETTORS, Bettor, Player } from '@/lib/constants'
 
 interface PlayerSelectProps {
   onSelect: (player: Player) => void
@@ -18,8 +18,8 @@ export default function PlayerSelect({ onSelect, selected, compact }: PlayerSele
     if (initialLoadDone.current) return
     initialLoadDone.current = true
 
-    const saved = localStorage.getItem('jungle_player') as Player | null
-    if (saved && BETTORS.includes(saved as Player)) {
+    const saved = localStorage.getItem('jungle_player')
+    if (saved && (BETTORS as readonly string[]).includes(saved)) {
       setCurrentPlayer(saved as Player)
       onSelect(saved as Player)
     }
