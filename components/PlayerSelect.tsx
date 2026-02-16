@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { PLAYERS, Player } from '@/lib/constants'
+import { BETTORS, Player } from '@/lib/constants'
 
 interface PlayerSelectProps {
   onSelect: (player: Player) => void
@@ -19,7 +19,7 @@ export default function PlayerSelect({ onSelect, selected, compact }: PlayerSele
     initialLoadDone.current = true
 
     const saved = localStorage.getItem('jungle_player') as Player | null
-    if (saved && PLAYERS.includes(saved as Player)) {
+    if (saved && BETTORS.includes(saved as Player)) {
       setCurrentPlayer(saved as Player)
       onSelect(saved as Player)
     }
@@ -63,7 +63,7 @@ export default function PlayerSelect({ onSelect, selected, compact }: PlayerSele
         )}
       </div>
       <div className="grid grid-cols-3 gap-3">
-        {PLAYERS.map((player) => (
+        {BETTORS.map((player) => (
           <button
             key={player}
             onClick={() => handleSelect(player, compact || false)}

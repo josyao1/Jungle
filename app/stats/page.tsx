@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback } from 'react'
-import { PLAYERS, STATS, STAT_LABELS, GAMES, Player, Stat, isPlayerInjured } from '@/lib/constants'
+import { PLAYERS, STATS, STAT_LABELS, GAMES, Player, Stat, isPlayerInjured, getRosterForGame } from '@/lib/constants'
 import { supabase } from '@/lib/supabase'
 
 interface PlayerStats {
@@ -150,7 +150,7 @@ export default function StatsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-xl md:text-2xl font-bold">
-          {selectedWeek === 'all' ? 'Season Stats' : `Week ${selectedWeek} Stats`}
+          {selectedWeek === 'all' ? 'Season Stats' : `${GAMES.find(g => g.number === selectedWeek)?.label || `Week ${selectedWeek}`} Stats`}
         </h1>
         {selectedWeek === 'all' && (
           <div className="toggle-group">
@@ -183,7 +183,7 @@ export default function StatsPage() {
             onClick={() => setSelectedWeek(g.number)}
             className={`week-btn ${selectedWeek === g.number ? 'active' : ''}`}
           >
-            Week {g.number}
+            {g.label}
           </button>
         ))}
       </div>
@@ -210,8 +210,10 @@ export default function StatsPage() {
             </tr>
           </thead>
           <tbody>
-            {sortedStats.map(({ player, stats }) => {
-              const injured = isPlayerInjured(player as Player)
+            {sortedStats
+              .filter(({ player }) => selectedWeek === 'all' || getRosterForGame(selectedWeek as number).includes(player as Player))
+              .map(({ player, stats }) => {
+              const injured = selectedWeek === 'all' ? isPlayerInjured(player as Player) : isPlayerInjured(player as Player, selectedWeek as number)
               return (
               <tr key={player} className={injured ? 'player-injured' : ''}>
                 <td className="capitalize font-medium">
@@ -243,21 +245,22 @@ export default function StatsPage() {
           ? (mode === 'perGame'
             ? 'Per game averages only include games where the stat was tracked.'
             : 'Totals across all games played this season.')
-          : `Stats from Week ${selectedWeek}.`}
+          : `Stats from ${GAMES.find(g => g.number === selectedWeek)?.label || `Week ${selectedWeek}`}.`}
       </div>
 
       <div className="glass-card rounded-2xl p-4 md:p-6">
         <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-4">Weekly Team MVPs</h2>
         <div className="overflow-x-auto mobile-scroll -mx-4 px-4 md:mx-0 md:px-0">
-          <div className="flex md:grid md:grid-cols-4 gap-3 md:gap-4 min-w-max md:min-w-0">
+          <div className="flex md:grid md:grid-cols-5 gap-3 md:gap-4 min-w-max md:min-w-0">
             {weeklyMVPs.map(({ week, mvp }) => {
+              const game = GAMES.find(g => g.number === week)
               const mvpSubtext: Record<number, string> = {
                 1: '9-0 run to give us control',
                 2: 'Stat Sheet Stuffer',
               }
               return (
                 <div key={week} className="glass-card rounded-xl p-3 md:p-4 text-center w-32 md:w-auto flex-shrink-0 md:flex-shrink">
-                  <div className="text-slate-500 text-xs md:text-sm mb-1">Week {week}</div>
+                  <div className="text-slate-500 text-xs md:text-sm mb-1">{game?.label || `Week ${week}`}</div>
                   <div className="text-base md:text-lg font-semibold capitalize">
                     {mvp || <span className="text-slate-600">TBD</span>}
                   </div>
@@ -276,7 +279,7 @@ export default function StatsPage() {
       <div className="glass-card rounded-2xl p-4 md:p-6">
         <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-4">Season Schedule</h2>
         <div className="overflow-x-auto mobile-scroll -mx-4 px-4 md:mx-0 md:px-0">
-          <div className="flex md:grid md:grid-cols-4 gap-3 md:gap-4 min-w-max md:min-w-0">
+          <div className="flex md:grid md:grid-cols-5 gap-3 md:gap-4 min-w-max md:min-w-0">
             {/* Week 1 - Played */}
             <div className="glass-card rounded-xl p-3 md:p-4 text-center border border-green-500/30 w-36 md:w-auto flex-shrink-0 md:flex-shrink">
               <div className="text-slate-500 text-xs mb-1">Feb 2</div>
@@ -313,6 +316,13 @@ export default function StatsPage() {
                 <span className="w-4 h-4 rounded-full bg-purple-600"></span>
                 <span className="text-xs text-slate-500">Purple</span>
               </div>
+            </div>
+
+            {/* Playoff 1 */}
+            <div className="glass-card rounded-xl p-3 md:p-4 text-center w-36 md:w-auto flex-shrink-0 md:flex-shrink">
+              <div className="text-slate-500 text-xs mb-1">Mar 2</div>
+              <div className="text-sm font-medium text-slate-300 mb-2">Playoff 1</div>
+              <div className="text-slate-600 text-sm mt-4">TBD</div>
             </div>
           </div>
         </div>

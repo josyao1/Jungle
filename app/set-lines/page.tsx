@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback } from 'react'
-import { PLAYERS, STATS, STAT_LABELS, GAMES, getGamePhase, Player, Stat, isPlayerInjured } from '@/lib/constants'
+import { PLAYERS, STATS, STAT_LABELS, GAMES, getGamePhase, Player, Stat, isPlayerInjured, getRosterForGame } from '@/lib/constants'
 import PlayerSelect from '@/components/PlayerSelect'
 import { supabase } from '@/lib/supabase'
 
@@ -15,6 +15,7 @@ export default function SetLinesPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [phase, setPhase] = useState<string>('open')
+  const [gameNumber, setGameNumber] = useState<number>(1)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -44,6 +45,7 @@ export default function SetLinesPage() {
 
     const currentPhase = getGamePhase(currentGame)
     setPhase(currentPhase)
+    setGameNumber(currentGame.number)
 
     let { data: games } = await supabase
       .from('games')
@@ -220,8 +222,8 @@ export default function SetLinesPage() {
               </tr>
             </thead>
             <tbody>
-              {PLAYERS.map(targetPlayer => {
-                const injured = isPlayerInjured(targetPlayer)
+              {getRosterForGame(gameNumber).map(targetPlayer => {
+                const injured = isPlayerInjured(targetPlayer, gameNumber)
                 return (
                   <tr key={targetPlayer} className={injured ? 'player-injured' : ''}>
                     <td className="capitalize font-medium">

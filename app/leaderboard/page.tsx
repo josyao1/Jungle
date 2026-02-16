@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback } from 'react'
-import { PLAYERS, GAMES, Player, isPlayerInjured } from '@/lib/constants'
+import { BETTORS, GAMES, Player, isPlayerInjured } from '@/lib/constants'
 import { supabase } from '@/lib/supabase'
 
 interface GameScore {
@@ -51,7 +51,7 @@ export default function LeaderboardPage() {
 
     const playerScores = new Map<string, PlayerScores>()
 
-    PLAYERS.forEach(p => {
+    BETTORS.forEach(p => {
       playerScores.set(p, {
         player: p,
         totalPoints: 0,
@@ -170,12 +170,12 @@ export default function LeaderboardPage() {
                         Game Breakdown
                       </div>
                       <div className="overflow-x-auto mobile-scroll -mx-3 px-3 md:mx-0 md:px-0">
-                        <div className="flex md:grid md:grid-cols-4 gap-3 min-w-max md:min-w-0">
+                        <div className="flex md:grid md:grid-cols-5 gap-3 min-w-max md:min-w-0">
                           {GAMES.map(g => {
                             const gameScore = entry.games.find(gs => gs.game_number === g.number)
                             return (
                               <div key={g.number} className="glass-card rounded-xl p-3 md:p-4 w-28 md:w-auto flex-shrink-0 md:flex-shrink">
-                                <div className="text-xs text-slate-500 mb-2">Week {g.number}</div>
+                                <div className="text-xs text-slate-500 mb-2">{g.label}</div>
                                 {gameScore ? (
                                   <>
                                     <div className="text-lg md:text-xl font-bold stat-value">{gameScore.total_points}</div>

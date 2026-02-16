@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback } from 'react'
-import { PLAYERS, STATS, STAT_LABELS, PROP_BETS, PROP_BET_LABELS, GAMES, getGamePhase, Player, Stat, PropBet, isPlayerInjured } from '@/lib/constants'
+import { PLAYERS, STATS, STAT_LABELS, PROP_BETS, PROP_BET_LABELS, GAMES, getGamePhase, Player, Stat, PropBet, isPlayerInjured, isPlayerOnRoster, getRosterForGame } from '@/lib/constants'
 import PlayerSelect from '@/components/PlayerSelect'
 import { supabase, Line, Pick, PropPick } from '@/lib/supabase'
 import { calculateAveragedLine } from '@/lib/utils'
@@ -272,7 +272,7 @@ export default function PickPage() {
       locked: boolean
     }> = []
 
-    PLAYERS.forEach(p => {
+    getRosterForGame(selectedWeek).forEach(p => {
       STATS.forEach(s => {
         picksToInsert.push({
           game_id: gameId,
@@ -352,7 +352,7 @@ export default function PickPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-xl md:text-2xl font-bold">Make Picks - Week {selectedWeek}</h1>
+        <h1 className="text-xl md:text-2xl font-bold">Make Picks - {GAMES.find(g => g.number === selectedWeek)?.label || `Week ${selectedWeek}`}</h1>
         <PlayerSelect onSelect={setPlayer} selected={player} compact />
       </div>
 
@@ -363,7 +363,7 @@ export default function PickPage() {
             onClick={() => handleWeekChange(g.number)}
             className={`week-btn ${selectedWeek === g.number ? 'active' : ''}`}
           >
-            Week {g.number}
+            {g.label}
             {g.number === currentGameNum && <span className="ml-1 text-xs opacity-75">(Current)</span>}
           </button>
         ))}
@@ -436,8 +436,8 @@ export default function PickPage() {
               </tr>
             </thead>
             <tbody>
-              {PLAYERS.map(targetPlayer => {
-                const injured = isPlayerInjured(targetPlayer)
+              {getRosterForGame(selectedWeek).map(targetPlayer => {
+                const injured = isPlayerInjured(targetPlayer, selectedWeek)
                 return (
                   <tr key={targetPlayer} className={injured ? 'player-injured' : ''}>
                     <td className="capitalize font-medium">
@@ -501,8 +501,8 @@ export default function PickPage() {
             <div key={prop}>
               <h3 className="text-sm text-slate-300 mb-3">{PROP_BET_LABELS[prop]}</h3>
               <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
-                {PLAYERS.map(p => {
-                  const injured = isPlayerInjured(p)
+                {getRosterForGame(selectedWeek).map(p => {
+                  const injured = isPlayerInjured(p, selectedWeek)
                   const propResult = propPicks[prop] === p ? getPropPickResult(prop, p) : null
                   return (
                     <button

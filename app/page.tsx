@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic'
 import { useState, useEffect, useCallback } from 'react'
 import PlayerSelect from '@/components/PlayerSelect'
 import GameStatus from '@/components/GameStatus'
-import { Player, PLAYERS, isPlayerInjured } from '@/lib/constants'
+import { Player, BETTORS, isPlayerInjured } from '@/lib/constants'
 import { supabase } from '@/lib/supabase'
 
 export default function Home() {
@@ -19,7 +19,7 @@ export default function Home() {
 
     if (data) {
       const totals = new Map<string, number>()
-      PLAYERS.forEach(p => totals.set(p, 0))
+      BETTORS.forEach(p => totals.set(p, 0))
       data.forEach(row => {
         const current = totals.get(row.player) || 0
         totals.set(row.player, current + (row.total_points || 0))
