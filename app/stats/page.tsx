@@ -257,6 +257,7 @@ export default function StatsPage() {
               const mvpSubtext: Record<number, string> = {
                 1: '9-0 run to give us control',
                 2: 'Stat Sheet Stuffer',
+                3: 'Did things',
               }
               return (
                 <div key={week} className="glass-card rounded-xl p-3 md:p-4 text-center w-32 md:w-auto flex-shrink-0 md:flex-shrink">
