@@ -301,11 +301,9 @@ export default function StatsPage() {
             <div className="glass-card rounded-xl p-3 md:p-4 text-center w-36 md:w-auto flex-shrink-0 md:flex-shrink">
               <div className="text-slate-500 text-xs mb-1">Feb 16</div>
               <div className="text-sm font-medium text-slate-300 mb-2">vs McCormick</div>
-              <div className="text-xs text-slate-500 mb-2">(nav & pranav superbowl)</div>
-              <div className="flex items-center justify-center gap-2 mt-4">
-                <span className="w-4 h-4 rounded-full bg-white border border-slate-600"></span>
-                <span className="text-xs text-slate-500">White</span>
-              </div>
+              <div className="text-xl font-bold stat-negative">L</div>
+              <div className="text-sm text-slate-400 mt-1">25-35</div>
+              
             </div>
 
             {/* Week 4 - Upcoming */}
