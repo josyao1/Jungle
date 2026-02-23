@@ -9,10 +9,10 @@ export type Player = typeof PLAYERS[number]
 // Check if a player is on the game roster (their stats appear in tables)
 // Andrew: on roster for all games (but injured from week 3)
 // Tyler: on roster for weeks 3 and 4 only
-// Vishi: on roster for week 3 only
+// Vishi: on roster for weeks 3, 4, and playoff 1
 export function isPlayerOnRoster(player: Player, gameNumber: number): boolean {
   if (player === 'tyler') return gameNumber === 3 || gameNumber === 4
-  if (player === 'vishi') return gameNumber === 3
+  if (player === 'vishi') return gameNumber === 3 || gameNumber === 4 || gameNumber === 5
   return true
 }
 
