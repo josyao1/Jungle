@@ -18,7 +18,7 @@ interface PlayerSelectProps {
 
 // Players who have a photo in /public/players/{name}.png
 const PLAYERS_WITH_PHOTOS = new Set([
-  'joshua', 'ronit', 'aarnav', 'evan', 'andrew', 'rohit', 'teja', 'aiyan', 'salil',
+  'joshua', 'ronit', 'aarnav', 'evan', 'andrew', 'rohit', 'teja', 'aiyan', 'salil', 'Jay', 'Tommy', 'Neo',
 ])
 
 // Each player gets a fixed hue for avatar ring consistency

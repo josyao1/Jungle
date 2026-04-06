@@ -33,7 +33,7 @@ const PLAYER_HUES: Record<string, string> = {
   andrew:'#f97316', rohit:'#ec4899', teja:'#10b981', aiyan:'#3b82f6',
   salil:'#eab308', Jay:'#8b5cf6', Tommy:'#84cc16', Neo:'#d946ef',
 }
-const PLAYERS_WITH_PHOTOS = new Set(['joshua','ronit','aarnav','evan','andrew','rohit','teja','aiyan','salil'])
+const PLAYERS_WITH_PHOTOS = new Set(['joshua','ronit','aarnav','evan','andrew','rohit','teja','aiyan','salil','Jay','Tommy','Neo'])
 
 function formatBA(hits: number, ab: number): string {
   if (ab === 0) return '.---'
@@ -248,19 +248,20 @@ export default function StatsPage() {
       )}
 
       <div className="glass-card rounded-2xl p-3 md:p-4 overflow-x-auto mobile-scroll">
+        <div style={{ minWidth: '710px', width: '100%' }}>
         {/* Column headers */}
         <div className="grid items-center pb-2 mb-1 px-2"
           style={{
-            gridTemplateColumns: 'minmax(130px,160px) repeat(5, minmax(50px,1fr)) minmax(54px,70px)',
+            gridTemplateColumns: 'minmax(180px,1fr) minmax(90px,1fr) minmax(70px,1fr) minmax(110px,1fr) minmax(90px,1fr) minmax(100px,1fr) minmax(70px,1fr)',
             borderBottom: '1px solid rgba(34,197,94,0.07)',
-            minWidth: '480px',
           }}>
           <button onClick={() => handleSort('player')} className="flex items-center gap-1 text-xs text-slate-600 uppercase tracking-wider font-bold hover:text-slate-300 transition-colors select-none text-left">
             Player <SortIcon column="player" />
           </button>
           {STATS.map(stat => (
             <button key={stat} onClick={() => handleSort(stat)}
-              className="flex items-center justify-center gap-1 text-xs text-slate-600 uppercase tracking-wider font-bold hover:text-slate-300 transition-colors select-none">
+              className="flex items-center justify-center gap-1 text-xs text-slate-600 uppercase tracking-wider font-bold hover:text-slate-300 transition-colors select-none"
+              style={{ whiteSpace: 'nowrap' }}>
               {STAT_LABELS[stat]} <SortIcon column={stat} />
             </button>
           ))}
@@ -272,7 +273,7 @@ export default function StatsPage() {
         </div>
 
         {/* Player card rows */}
-        <div className="space-y-1.5" style={{ minWidth: '480px' }}>
+        <div className="space-y-1.5">
           {sortedStats.map(({ player, stats, totalHits, totalAb }) => {
             const isInactiveThisWeek = selectedWeek !== 'all' && (weeklyInactive.get(selectedWeek as number)?.has(player) ?? false)
             const color = PLAYER_HUES[player] || '#22c55e'
@@ -282,7 +283,7 @@ export default function StatsPage() {
               <div key={player}
                 className="grid items-center rounded-xl px-2 py-2.5"
                 style={{
-                  gridTemplateColumns: 'minmax(130px,160px) repeat(5, minmax(50px,1fr)) minmax(54px,70px)',
+                  gridTemplateColumns: 'minmax(180px,1fr) minmax(90px,1fr) minmax(70px,1fr) minmax(110px,1fr) minmax(90px,1fr) minmax(100px,1fr) minmax(70px,1fr)',
                   background: isInactiveThisWeek ? 'rgba(6,11,8,0.3)' : 'rgba(15,35,24,0.5)',
                   border: `1px solid ${isInactiveThisWeek ? 'rgba(255,255,255,0.04)' : `${color}12`}`,
                   borderLeft: `3px solid ${isInactiveThisWeek ? 'rgba(100,116,139,0.2)' : color}`,
@@ -340,6 +341,7 @@ export default function StatsPage() {
             )
           })}
         </div>
+        </div>
       </div>
 
       <div className="text-slate-500 text-sm">
@@ -385,7 +387,7 @@ export default function StatsPage() {
             {GAMES.map(g => {
               const h = weeklyHighlights.get(g.number)
               const mvp = h?.mvp_player
-              const hasPhoto = mvp && ['joshua','ronit','aarnav','evan','andrew','rohit','teja','aiyan','salil'].includes(mvp)
+              const hasPhoto = mvp && PLAYERS_WITH_PHOTOS.has(mvp)
               const mvpColor = mvp ? ({
                 joshua:'#22c55e', ronit:'#f59e0b', aarnav:'#06b6d4', evan:'#a855f7',
                 andrew:'#f97316', rohit:'#ec4899', teja:'#10b981', aiyan:'#3b82f6',

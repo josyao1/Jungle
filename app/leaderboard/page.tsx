@@ -32,7 +32,7 @@ const PLAYER_HUES: Record<string, string> = {
 }
 
 const PLAYERS_WITH_PHOTOS = new Set([
-  'joshua','ronit','aarnav','evan','andrew','rohit','teja','aiyan','salil',
+  'joshua','ronit','aarnav','evan','andrew','rohit','teja','aiyan','salil','Jay','Tommy','Neo',
 ])
 
 const RANK_STYLES = [

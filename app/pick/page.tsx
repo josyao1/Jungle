@@ -19,7 +19,7 @@ const PLAYER_HUES: Record<string, string> = {
   andrew:'#f97316', rohit:'#ec4899', teja:'#10b981', aiyan:'#3b82f6',
   salil:'#eab308', Jay:'#8b5cf6', Tommy:'#84cc16', Neo:'#d946ef',
 }
-const PLAYERS_WITH_PHOTOS = new Set(['joshua','ronit','aarnav','evan','andrew','rohit','teja','aiyan','salil'])
+const PLAYERS_WITH_PHOTOS = new Set(['joshua','ronit','aarnav','evan','andrew','rohit','teja','aiyan','salil','Jay','Tommy','Neo'])
 const STAT_SHORT: Record<string, string> = {
   hits: 'H', rbis: 'RBI', totalbases: 'Total Bases', errors: 'Errors', strikeouts: 'K',
 }
@@ -394,25 +394,26 @@ export default function PickPage() {
           </span>
         </div>
 
-        {/* Sticky stat column headers */}
-        <div className="sticky z-10 grid items-center py-1.5 mb-2 -mx-3 px-3 md:-mx-5 md:px-5"
-          style={{
-            top: '60px',
-            gridTemplateColumns: '110px repeat(5, 1fr)',
-            background: 'rgba(13,26,18,0.97)',
-            backdropFilter: 'blur(10px)',
-            borderBottom: '1px solid rgba(34,197,94,0.06)',
-          }}>
-          <div className="text-xs text-slate-600 font-bold uppercase tracking-wider">Player</div>
-          {STATS.map(stat => (
-            <div key={stat} className="text-center text-xs text-slate-600 font-bold uppercase tracking-wider">
-              {STAT_SHORT[stat]}
-            </div>
-          ))}
-        </div>
+        {/* Scrollable table — header + rows share one overflow-x container */}
+        <div className="overflow-x-auto mobile-scroll -mx-3 px-3 md:-mx-5 md:px-5">
+          <div style={{ minWidth: '480px' }}>
 
-        {/* Player card rows */}
-        <div className="space-y-1.5">
+            {/* Column headers */}
+            <div className="grid items-center py-1.5 mb-2"
+              style={{
+                gridTemplateColumns: '120px repeat(5, 1fr)',
+                borderBottom: '1px solid rgba(34,197,94,0.07)',
+              }}>
+              <div className="text-xs text-slate-500 font-bold uppercase tracking-wider">Player</div>
+              {STATS.map(stat => (
+                <div key={stat} className="text-center text-xs text-slate-500 font-bold uppercase tracking-wider">
+                  {STAT_SHORT[stat]}
+                </div>
+              ))}
+            </div>
+
+            {/* Player card rows */}
+            <div className="space-y-1.5">
           {sortWithInactiveAtBottom(PLAYERS, inactivePlayers).map(targetPlayer => {
             const isInactive = inactivePlayers.has(targetPlayer)
             const color = PLAYER_HUES[targetPlayer] || '#22c55e'
@@ -422,7 +423,7 @@ export default function PickPage() {
               <div key={targetPlayer}
                 className="grid items-center rounded-xl px-2 py-2"
                 style={{
-                  gridTemplateColumns: '110px repeat(5, 1fr)',
+                  gridTemplateColumns: '120px repeat(5, 1fr)',
                   background: isInactive ? 'rgba(6,11,8,0.35)' : 'rgba(15,35,24,0.5)',
                   border: `1px solid ${isInactive ? 'rgba(255,255,255,0.03)' : `${color}15`}`,
                   borderLeft: `3px solid ${isInactive ? 'rgba(100,116,139,0.25)' : color}`,
@@ -496,6 +497,8 @@ export default function PickPage() {
               </div>
             )
           })}
+            </div>
+          </div>
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">
