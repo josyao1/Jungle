@@ -16,7 +16,7 @@ export default function SetLinesPage() {
   const [saving, setSaving] = useState(false)
   const [phase, setPhase] = useState<string>('open')
   const [gameNumber, setGameNumber] = useState<number>(1)
-  const [inactivePlayers, setInactivePlayers] = useState<Set<string>>(new Set())
+  const [inactivePlayers, setInactivePlayers] = useState<Map<string, string>>(new Map())
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -169,8 +169,13 @@ export default function SetLinesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Set Lines</h1>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold">Set Lines</h1>
+          <p className="text-slate-500 text-sm mt-1">
+            This is <span className="text-slate-300 font-medium">not</span> your picks — you're predicting stats so everyone's submissions average into the official line.
+          </p>
+        </div>
         <PlayerSelect onSelect={setPlayer} selected={player} compact />
       </div>
 
@@ -210,7 +215,7 @@ export default function SetLinesPage() {
                   <tr key={targetPlayer} className={isInactive ? 'player-inactive' : ''}>
                     <td className="capitalize font-medium">
                       <span>{targetPlayer}</span>
-                      {isInactive && <span className="badge badge-out ml-2">OUT</span>}
+                      {isInactive && <span className="badge badge-out ml-2">{inactivePlayers.get(targetPlayer) || 'OUT'}</span>}
                     </td>
                     {STATS.map(stat => (
                       <td key={stat} className="text-center">

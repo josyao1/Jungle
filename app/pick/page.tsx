@@ -2,11 +2,27 @@
 
 export const dynamic = 'force-dynamic'
 
+/**
+ * Pick page — Players submit over/under picks against the averaged lines.
+ * Inactive players are shown at the bottom with blank cells and an OUT badge.
+ * Picks lock when the game starts (lockTime). +1 correct, -0.5 missed.
+ */
+
 import { useState, useEffect, useCallback } from 'react'
 import { PLAYERS, STATS, STAT_LABELS, GAMES, PROP_BETS, PROP_BET_LABELS, getGamePhase, sortWithInactiveAtBottom, Player, Stat } from '@/lib/constants'
 import PlayerSelect from '@/components/PlayerSelect'
 import { supabase, Line, Pick, getInactivePlayersForGame } from '@/lib/supabase'
 import { calculateAveragedLine } from '@/lib/utils'
+
+const PLAYER_HUES: Record<string, string> = {
+  joshua:'#22c55e', ronit:'#f59e0b', aarnav:'#06b6d4', evan:'#a855f7',
+  andrew:'#f97316', rohit:'#ec4899', teja:'#10b981', aiyan:'#3b82f6',
+  salil:'#eab308', Jay:'#8b5cf6', Tommy:'#84cc16', Neo:'#d946ef',
+}
+const PLAYERS_WITH_PHOTOS = new Set(['joshua','ronit','aarnav','evan','andrew','rohit','teja','aiyan','salil'])
+const STAT_SHORT: Record<string, string> = {
+  hits: 'H', rbis: 'RBI', totalbases: 'Total Bases', errors: 'Errors', strikeouts: 'K',
+}
 
 export default function PickPage() {
   const [player, setPlayer] = useState<Player | null>(null)
@@ -15,11 +31,11 @@ export default function PickPage() {
   const [lines, setLines] = useState<Line[]>([])
   const [picks, setPicks] = useState<Record<string, Record<string, boolean>>>({})
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
   const [phase, setPhase] = useState<string>('open')
   const [results, setResults] = useState<Array<{ player: string; stat: string; value: number }>>([])
   const [userPredictions, setUserPredictions] = useState<Array<{ player: string; stat: string; value: number }>>([])
-  const [inactivePlayers, setInactivePlayers] = useState<Set<string>>(new Set())
+  const [inactivePlayers, setInactivePlayers] = useState<Map<string, string>>(new Map())
   const [propPicks, setPropPicks] = useState<Record<string, string>>({})
   const [propResults, setPropResults] = useState<Record<string, string>>({})
   const [autoPickedCells, setAutoPickedCells] = useState<Array<{ player: string; stat: string }>>([])
@@ -188,11 +204,33 @@ export default function PickPage() {
 
   useEffect(() => { loadData() }, [loadData])
 
+  const autoSave = async (newPicks: Record<string, Record<string, boolean>>) => {
+    if (!player || !gameId) return
+    setSaveStatus('saving')
+    const picksToInsert = PLAYERS.filter(p => !inactivePlayers.has(p)).flatMap(p =>
+      STATS.map(s => ({
+        game_id: gameId,
+        picker: player,
+        player: p,
+        stat: s,
+        picked: newPicks[p]?.[s] || false,
+        locked: phase === 'locked',
+      }))
+    )
+    await supabase.from('jungle_picks').upsert(picksToInsert, { onConflict: 'game_id,picker,player,stat' })
+    setSaveStatus('saved')
+    setTimeout(() => setSaveStatus('idle'), 1500)
+  }
+
   const togglePick = (targetPlayer: string, stat: string) => {
-    setPicks(prev => ({
-      ...prev,
-      [targetPlayer]: { ...prev[targetPlayer], [stat]: !prev[targetPlayer]?.[stat] },
-    }))
+    setPicks(prev => {
+      const updated = {
+        ...prev,
+        [targetPlayer]: { ...prev[targetPlayer], [stat]: !prev[targetPlayer]?.[stat] },
+      }
+      autoSave(updated)
+      return updated
+    })
   }
 
   const handleDismissAutoPick = () => setShowAutoPickAlert(false)
@@ -218,38 +256,17 @@ export default function PickPage() {
     loadData(selectedWeek)
   }
 
-  const handleSubmit = async () => {
+  const autoSavePropPick = async (propType: string, pickedPlayer: string) => {
     if (!player || !gameId) return
-    setSaving(true)
-
-    const picksToInsert = PLAYERS.filter(p => !inactivePlayers.has(p)).flatMap(p =>
-      STATS.map(s => ({
-        game_id: gameId,
-        picker: player,
-        player: p,
-        stat: s,
-        picked: picks[p]?.[s] || false,
-        locked: phase === 'locked',
-      }))
-    )
-
-    await supabase.from('jungle_picks').upsert(picksToInsert, { onConflict: 'game_id,picker,player,stat' })
-
-    // Save prop picks
-    const propPicksToInsert = Object.entries(propPicks)
-      .filter(([, pickedPlayer]) => pickedPlayer)
-      .map(([propType, pickedPlayer]) => ({
-        game_id: gameId,
-        picker: player,
-        prop_type: propType,
-        player_picked: pickedPlayer,
-      }))
-    if (propPicksToInsert.length > 0) {
-      await supabase.from('jungle_prop_picks').upsert(propPicksToInsert, { onConflict: 'game_id,picker,prop_type' })
-    }
-
-    setSaving(false)
-    alert('Picks saved!')
+    setSaveStatus('saving')
+    await supabase.from('jungle_prop_picks').upsert({
+      game_id: gameId,
+      picker: player,
+      prop_type: propType,
+      player_picked: pickedPlayer,
+    }, { onConflict: 'game_id,picker,prop_type' })
+    setSaveStatus('saved')
+    setTimeout(() => setSaveStatus('idle'), 1500)
   }
 
   const getLine = (targetPlayer: string, stat: string): number | null => {
@@ -300,6 +317,23 @@ export default function PickPage() {
         <PlayerSelect onSelect={setPlayer} selected={player} compact />
       </div>
 
+      {/* Set lines nudge — secondary entry point, not part of the picks flow */}
+      {!isLocked && (
+        <a
+          href="/set-lines"
+          className="flex items-center justify-between px-4 py-3 rounded-xl transition-all"
+          style={{ background: 'rgba(34,197,94,0.04)', border: '1px solid rgba(34,197,94,0.1)' }}
+        >
+          <div>
+            <span className="text-sm font-medium text-slate-300">Want to help set the lines?</span>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Submit your stat predictions — everyone's get averaged into the official line.
+            </p>
+          </div>
+          <span className="text-green-500 text-lg shrink-0 ml-3">→</span>
+        </a>
+      )}
+
       <div className="week-selector">
         {GAMES.map(g => (
           <button
@@ -313,12 +347,6 @@ export default function PickPage() {
         ))}
       </div>
 
-      {!isLocked && (
-        <button onClick={handleSubmit} disabled={saving}
-          className="w-full btn-accent py-3 rounded-xl text-sm font-semibold disabled:opacity-50">
-          {saving ? 'Saving...' : 'Save Picks'}
-        </button>
-      )}
 
       {isLocked && (
         <div className="glass-card rounded-xl p-4 border border-red-500/30">
@@ -354,68 +382,131 @@ export default function PickPage() {
         </div>
       )}
 
-      <div className="glass-card rounded-2xl p-4 md:p-6">
-        <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-1">Line Picks</h2>
-        <p className="text-slate-500 text-sm mb-4">Tap to bet the over. Support the squad!</p>
-
-        <div className="overflow-x-auto mobile-scroll -mx-4 px-4 md:mx-0 md:px-0">
-          <table className="glass-table">
-            <thead>
-              <tr>
-                <th>Player</th>
-                {STATS.map(stat => (
-                  <th key={stat} className="text-center">{STAT_LABELS[stat]}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {sortWithInactiveAtBottom(PLAYERS, inactivePlayers).map(targetPlayer => {
-                const isInactive = inactivePlayers.has(targetPlayer)
-                return (
-                  <tr key={targetPlayer} className={isInactive ? 'player-inactive' : ''}>
-                    <td className="capitalize font-medium">
-                      <span>{targetPlayer}</span>
-                      {isInactive && <span className="badge badge-out ml-2">OUT</span>}
-                    </td>
-                    {STATS.map(stat => {
-                      if (isInactive) {
-                        return <td key={stat} className="text-center"><span className="text-slate-700">—</span></td>
-                      }
-                      const line = getLine(targetPlayer, stat)
-                      const isPicked = picks[targetPlayer]?.[stat]
-                      const pickResult = getPickResult(targetPlayer, stat)
-                      return (
-                        <td key={stat} className="text-center">
-                          <button
-                            onClick={() => !isLocked && togglePick(targetPlayer, stat)}
-                            disabled={isLocked}
-                            className={`w-14 md:w-16 h-10 rounded-lg text-sm font-medium transition-all pick-btn ${
-                              pickResult === 'correct' ? 'pick-correct'
-                              : pickResult === 'incorrect' ? 'pick-incorrect'
-                              : isPicked ? 'selected' : ''
-                            } disabled:opacity-50`}
-                          >
-                            {line !== null ? Math.max(0, line - 0.5) : '—'}
-                          </button>
-                        </td>
-                      )
-                    })}
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+      <div className="glass-card rounded-2xl p-3 md:p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide">Line Picks</h2>
+          <span className="text-xs transition-all"
+            style={{
+              color: saveStatus === 'saving' ? '#64748b' : '#22c55e',
+              opacity: saveStatus === 'idle' ? 0 : 1,
+            }}>
+            {saveStatus === 'saving' ? 'Saving...' : '✓ Saved'}
+          </span>
         </div>
 
-        <div className="mt-4 text-sm text-slate-500 flex flex-wrap items-center gap-x-4 gap-y-1">
-          <span className="flex items-center gap-1">
-            <span className="inline-block w-3 h-3 border-2 border-green-500 rounded bg-green-500/20"></span>
-            {isLocked ? '= Hit' : '= Picked Over'}
+        {/* Sticky stat column headers */}
+        <div className="sticky z-10 grid items-center py-1.5 mb-2 -mx-3 px-3 md:-mx-5 md:px-5"
+          style={{
+            top: '60px',
+            gridTemplateColumns: '110px repeat(5, 1fr)',
+            background: 'rgba(13,26,18,0.97)',
+            backdropFilter: 'blur(10px)',
+            borderBottom: '1px solid rgba(34,197,94,0.06)',
+          }}>
+          <div className="text-xs text-slate-600 font-bold uppercase tracking-wider">Player</div>
+          {STATS.map(stat => (
+            <div key={stat} className="text-center text-xs text-slate-600 font-bold uppercase tracking-wider">
+              {STAT_SHORT[stat]}
+            </div>
+          ))}
+        </div>
+
+        {/* Player card rows */}
+        <div className="space-y-1.5">
+          {sortWithInactiveAtBottom(PLAYERS, inactivePlayers).map(targetPlayer => {
+            const isInactive = inactivePlayers.has(targetPlayer)
+            const color = PLAYER_HUES[targetPlayer] || '#22c55e'
+            const hasPhoto = PLAYERS_WITH_PHOTOS.has(targetPlayer)
+
+            return (
+              <div key={targetPlayer}
+                className="grid items-center rounded-xl px-2 py-2"
+                style={{
+                  gridTemplateColumns: '110px repeat(5, 1fr)',
+                  background: isInactive ? 'rgba(6,11,8,0.35)' : 'rgba(15,35,24,0.5)',
+                  border: `1px solid ${isInactive ? 'rgba(255,255,255,0.03)' : `${color}15`}`,
+                  borderLeft: `3px solid ${isInactive ? 'rgba(100,116,139,0.25)' : color}`,
+                }}>
+
+                {/* Player cell */}
+                <div className="flex items-center gap-1.5 min-w-0 pr-1">
+                  <div className="w-7 h-7 rounded-full shrink-0 overflow-hidden flex items-center justify-center"
+                    style={{ background: hasPhoto ? undefined : `${color}18`, border: `1.5px solid ${color}40` }}>
+                    {hasPhoto
+                      ? <img src={`/players/${targetPlayer}.png`} alt={targetPlayer} className="w-full h-full object-cover" />
+                      : <span style={{ color, fontSize: '0.65rem', fontFamily: "'Bebas Neue', sans-serif", letterSpacing: '0.04em' }}>{targetPlayer.charAt(0).toUpperCase()}</span>
+                    }
+                  </div>
+                  <div className="min-w-0">
+                    <span className="capitalize text-xs font-semibold text-slate-200 truncate block">{targetPlayer}</span>
+                    {isInactive && <span className="badge badge-out">{inactivePlayers.get(targetPlayer) || 'OUT'}</span>}
+                  </div>
+                </div>
+
+                {/* Pick chip cells */}
+                {STATS.map(stat => {
+                  if (isInactive) {
+                    return <div key={stat} className="flex justify-center"><span className="text-slate-700 text-xs">—</span></div>
+                  }
+                  const line = getLine(targetPlayer, stat)
+                  const isPicked = picks[targetPlayer]?.[stat]
+                  const pickResult = getPickResult(targetPlayer, stat)
+
+                  const chipBg = pickResult === 'correct' ? 'rgba(34,197,94,0.18)'
+                    : pickResult === 'incorrect' ? 'rgba(239,68,68,0.12)'
+                    : isPicked ? 'rgba(34,197,94,0.12)'
+                    : 'rgba(6,11,8,0.7)'
+                  const chipBorder = pickResult === 'correct' ? '1px solid rgba(34,197,94,0.55)'
+                    : pickResult === 'incorrect' ? '1px solid rgba(239,68,68,0.35)'
+                    : isPicked ? '1px solid rgba(34,197,94,0.4)'
+                    : '1px solid rgba(255,255,255,0.06)'
+                  const chipColor = pickResult === 'correct' ? '#22c55e'
+                    : pickResult === 'incorrect' ? '#f87171'
+                    : isPicked ? '#22c55e'
+                    : '#475569'
+                  const chipGlow = (isPicked && !pickResult) ? '0 0 6px rgba(34,197,94,0.1)' : pickResult === 'correct' ? '0 0 8px rgba(34,197,94,0.2)' : 'none'
+
+                  return (
+                    <div key={stat} className="flex justify-center">
+                      <button
+                        onClick={() => !isLocked && togglePick(targetPlayer, stat)}
+                        disabled={isLocked}
+                        style={{
+                          background: chipBg,
+                          border: chipBorder,
+                          color: chipColor,
+                          boxShadow: chipGlow,
+                          borderRadius: '7px',
+                          padding: '3px 5px',
+                          fontFamily: "'JetBrains Mono', monospace",
+                          fontSize: '0.68rem',
+                          fontWeight: 700,
+                          minWidth: '38px',
+                          height: '28px',
+                          transition: 'all 0.12s ease',
+                          cursor: isLocked ? 'default' : 'pointer',
+                        }}
+                        className="disabled:opacity-40"
+                      >
+                        {line !== null ? Math.max(0, line - 0.5) : '—'}
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })}
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600">
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded" style={{ background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.45)' }}></span>
+            {isLocked ? 'Hit' : 'Picked over'}
           </span>
           {isLocked && (
-            <span className="flex items-center gap-1">
-              <span className="inline-block w-3 h-3 border-2 border-red-500 rounded bg-red-500/20"></span>
-              = Miss
+            <span className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded" style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)' }}></span>
+              Miss
             </span>
           )}
         </div>
@@ -435,7 +526,7 @@ export default function PickPage() {
                   return (
                     <button
                       key={p}
-                      onClick={() => !isLocked && setPropPicks(prev => ({ ...prev, [prop]: p }))}
+                      onClick={() => { if (!isLocked) { setPropPicks(prev => ({ ...prev, [prop]: p })); autoSavePropPick(prop, p) } }}
                       disabled={isLocked}
                       className={`px-2 py-3 rounded-lg text-xs capitalize font-medium transition-all pick-btn ${
                         propResult === 'correct' ? 'pick-correct'

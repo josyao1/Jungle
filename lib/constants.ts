@@ -12,10 +12,10 @@
  */
 
 // All players (also the bettors - everyone in the group)
-export const BETTORS = ['joshua', 'ronit', 'aarnav', 'evan', 'andrew', 'rohit', 'teja', 'aiyan', 'salil'] as const
+export const BETTORS = ['joshua', 'ronit', 'aarnav', 'evan', 'andrew', 'rohit', 'teja', 'aiyan', 'salil', 'Jay', 'Tommy', 'Neo'] as const
 export type Bettor = typeof BETTORS[number]
 
-export const PLAYERS = ['joshua', 'ronit', 'aarnav', 'evan', 'andrew', 'rohit', 'teja', 'aiyan', 'salil'] as const
+export const PLAYERS = ['joshua', 'ronit', 'aarnav', 'evan', 'andrew', 'rohit', 'teja', 'aiyan', 'salil', 'Jay', 'Tommy', 'Neo'] as const
 export type Player = typeof PLAYERS[number]
 
 // All players are on roster for all games (no IR system to start)
@@ -41,11 +41,12 @@ export const ACTIVE_PLAYERS = PLAYERS
 export const STATS = ['hits', 'rbis', 'totalbases', 'errors', 'strikeouts'] as const
 
 // Prop bets — one per game, no exact line scoring, just pick the player
-export const PROP_BETS = ['biggest_disaster'] as const
+export const PROP_BETS = ['biggest_disaster', 'longest_hit'] as const
 export type PropBet = typeof PROP_BETS[number]
 
 export const PROP_BET_LABELS: Record<PropBet, string> = {
   biggest_disaster: '🤦 Biggest Disaster Moment',
+  longest_hit: '💥 Longest Hit',
 }
 export type Stat = typeof STATS[number]
 
@@ -54,7 +55,7 @@ export const STAT_LABELS: Record<Stat, string> = {
   rbis: 'RBIs',
   totalbases: 'Total Bases',
   errors: 'Errors',
-  strikeouts: 'Ks',
+  strikeouts: 'Ks (throw)',
 }
 
 // Game dates - Sundays at 3pm CDT (UTC-5 = 20:00 UTC) starting April 12
@@ -91,8 +92,9 @@ export const GAMES = [
   },
 ]
 
-// Sort players so inactive ones always appear at the bottom
-export function sortWithInactiveAtBottom(players: readonly string[], inactive: Set<string>): string[] {
+// Sort players so inactive ones always appear at the bottom.
+// Accepts Set<string> or Map<string, any> (both have .has()).
+export function sortWithInactiveAtBottom(players: readonly string[], inactive: { has(p: string): boolean }): string[] {
   return [...players].sort((a, b) => {
     const aOut = inactive.has(a) ? 1 : 0
     const bOut = inactive.has(b) ? 1 : 0

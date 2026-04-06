@@ -3,50 +3,25 @@
 export const dynamic = 'force-dynamic'
 
 /**
- * Home page — player selection, current standings, and quick-nav cards.
+ * Home page — player selection, game status, and quick-nav buttons.
  * Player selection persists to localStorage as 'jungle_player'.
  */
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState } from 'react'
 import PlayerSelect from '@/components/PlayerSelect'
 import GameStatus from '@/components/GameStatus'
-import { Player, BETTORS } from '@/lib/constants'
-import { supabase } from '@/lib/supabase'
+import { Player } from '@/lib/constants'
 
 export default function Home() {
   const [player, setPlayer] = useState<Player | null>(null)
-  const [leaderboard, setLeaderboard] = useState<Array<{ player: string; total: number }>>([])
-
-  const loadLeaderboard = useCallback(async () => {
-    const { data } = await supabase
-      .from('jungle_scores')
-      .select('player, total_points')
-
-    if (data) {
-      const totals = new Map<string, number>()
-      BETTORS.forEach(p => totals.set(p, 0))
-      data.forEach(row => {
-        const current = totals.get(row.player) || 0
-        totals.set(row.player, current + (row.total_points || 0))
-      })
-
-      const sorted = Array.from(totals.entries())
-        .map(([player, total]) => ({ player, total }))
-        .sort((a, b) => b.total - a.total)
-
-      setLeaderboard(sorted)
-    }
-  }, [])
-
-  useEffect(() => {
-    loadLeaderboard()
-  }, [loadLeaderboard])
 
   return (
     <div className="space-y-8">
       <div className="text-center mb-10">
         <div className="text-xs font-semibold tracking-[0.3em] uppercase text-slate-500 mb-2">Softball Season</div>
-        <h1 className="text-5xl font-black tracking-tight mb-2">
+        <h1 className="text-5xl font-black tracking-tight mb-2 flex items-center justify-center gap-3">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/headshot.png" alt="Jungle" className="w-12 h-12 rounded-full object-cover shrink-0" style={{ border: '2px solid rgba(34,197,94,0.3)', boxShadow: '0 0 16px rgba(34,197,94,0.15)' }} />
           <span className="text-gradient-brand">JUNGLE</span>
         </h1>
         <p className="text-slate-500 text-sm">IM Softball Sportsbook · Spring 2026</p>
@@ -55,12 +30,12 @@ export default function Home() {
       <div className="glass-card rounded-2xl p-5 space-y-3">
         <h2 className="text-xs font-bold uppercase tracking-widest text-slate-500" style={{ fontFamily: "'JetBrains Mono', monospace" }}>How It Works</h2>
         <div className="flex gap-3 items-start">
-          <span className="text-xs font-bold px-2 py-0.5 rounded" style={{ background: 'rgba(34,197,94,0.12)', color: '#22c55e', fontFamily: "'JetBrains Mono', monospace", flexShrink: 0 }}>1</span>
-          <p className="text-sm text-slate-400"><span className="text-slate-200 font-medium">Set Lines</span> — Predict each player's stats for the week. Everyone's submissions get averaged together to form the official line.</p>
+          <span className="text-xs font-bold px-2 py-0.5 rounded shrink-0" style={{ background: 'rgba(34,197,94,0.12)', color: '#22c55e', fontFamily: "'JetBrains Mono', monospace" }}>1</span>
+          <p className="text-sm text-slate-400"><span className="text-slate-200 font-medium">Set Lines</span> — Predict each player's stats. <span className="text-slate-300">This is NOT picking over/under</span> — everyone's predictions average together into the official line.</p>
         </div>
         <div className="flex gap-3 items-start">
-          <span className="text-xs font-bold px-2 py-0.5 rounded" style={{ background: 'rgba(34,197,94,0.12)', color: '#22c55e', fontFamily: "'JetBrains Mono', monospace", flexShrink: 0 }}>2</span>
-          <p className="text-sm text-slate-400"><span className="text-slate-200 font-medium">Pick</span> — Bet the over on any lines you like. Hit = +1 pt, miss = -0.5 pts. Support the squad.</p>
+          <span className="text-xs font-bold px-2 py-0.5 rounded shrink-0" style={{ background: 'rgba(34,197,94,0.12)', color: '#22c55e', fontFamily: "'JetBrains Mono', monospace" }}>2</span>
+          <p className="text-sm text-slate-400"><span className="text-slate-200 font-medium">Pick Overs</span> — Bet the over on any lines you like. Hit = +1 pt, miss = −0.5 pts.</p>
         </div>
       </div>
 
@@ -70,50 +45,22 @@ export default function Home() {
         <>
           <GameStatus />
 
-          <div className="glass-card rounded-2xl p-6">
-            <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-4">Standings</h2>
-            <div className="space-y-2">
-              {leaderboard.map((entry, i) => (
-                <div
-                  key={entry.player}
-                  className={`flex items-center justify-between p-4 rounded-xl transition-all ${
-                    entry.player === player
-                      ? 'bg-emerald-500/10 border border-emerald-500/30'
-                      : 'bg-white/[0.02] hover:bg-white/[0.04]'
-                  }`}
-                >
-                  <div className="flex items-center gap-4">
-                    <span className={`w-8 text-center text-lg font-bold ${
-                      i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : 'text-slate-600'
-                    }`}>
-                      {i + 1}
-                    </span>
-                    <span className="capitalize font-medium">{entry.player}</span>
-                  </div>
-                  <span className={`text-xl font-bold ${i === 0 ? 'stat-value' : 'text-slate-400'}`}>
-                    {entry.total}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <a href="/set-lines" className="glass-card glass-card-hover rounded-2xl p-6 text-center">
-              <div className="text-3xl mb-3">📊</div>
-              <div className="text-sm font-medium text-slate-400">Set Lines</div>
+          {/* Quick nav */}
+          <div className="grid grid-cols-3 gap-3">
+            <a href="/pick"
+              className="glass-card glass-card-hover rounded-2xl p-5 flex flex-col items-center justify-center gap-2 text-center">
+              <span className="text-2xl">🎯</span>
+              <span className="text-sm font-semibold text-slate-300">Pick Overs</span>
             </a>
-            <a href="/pick" className="glass-card glass-card-hover rounded-2xl p-6 text-center">
-              <div className="text-3xl mb-3">🎯</div>
-              <div className="text-sm font-medium text-slate-400">Make Picks</div>
+            <a href="/stats"
+              className="glass-card glass-card-hover rounded-2xl p-5 flex flex-col items-center justify-center gap-2 text-center">
+              <span className="text-2xl">📊</span>
+              <span className="text-sm font-semibold text-slate-300">Stats</span>
             </a>
-            <a href="/results" className="glass-card glass-card-hover rounded-2xl p-6 text-center">
-              <div className="text-3xl mb-3">📝</div>
-              <div className="text-sm font-medium text-slate-400">Results</div>
-            </a>
-            <a href="/leaderboard" className="glass-card glass-card-hover rounded-2xl p-6 text-center">
-              <div className="text-3xl mb-3">🏆</div>
-              <div className="text-sm font-medium text-slate-400">Leaderboard</div>
+            <a href="/leaderboard"
+              className="glass-card glass-card-hover rounded-2xl p-5 flex flex-col items-center justify-center gap-2 text-center">
+              <span className="text-2xl">🏆</span>
+              <span className="text-sm font-semibold text-slate-300">Board</span>
             </a>
           </div>
         </>

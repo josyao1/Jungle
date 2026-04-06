@@ -80,6 +80,7 @@ CREATE TABLE IF NOT EXISTS jungle_player_availability (
   game_id uuid REFERENCES jungle_games(id) ON DELETE CASCADE,
   player text NOT NULL,
   active boolean DEFAULT true,
+  reason text DEFAULT 'OUT',
   created_at timestamptz DEFAULT now(),
   UNIQUE(game_id, player)
 );
@@ -93,6 +94,16 @@ CREATE TABLE IF NOT EXISTS jungle_scores (
   total_points decimal DEFAULT 0,
   created_at timestamptz DEFAULT now(),
   UNIQUE(game_id, player)
+);
+
+-- Team MVP + game recap blurb set by admin per week
+CREATE TABLE IF NOT EXISTS jungle_weekly_highlights (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  game_id uuid REFERENCES jungle_games(id) ON DELETE CASCADE,
+  mvp_player text,
+  mvp_blurb text,
+  created_at timestamptz DEFAULT now(),
+  UNIQUE(game_id)
 );
 
 -- Insert 5 games: Sundays at 3pm CDT (20:00 UTC) starting April 12, 2026
@@ -114,6 +125,7 @@ ALTER TABLE jungle_prop_picks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE jungle_prop_results ENABLE ROW LEVEL SECURITY;
 ALTER TABLE jungle_player_availability ENABLE ROW LEVEL SECURITY;
 ALTER TABLE jungle_scores ENABLE ROW LEVEL SECURITY;
+ALTER TABLE jungle_weekly_highlights ENABLE ROW LEVEL SECURITY;
 
 -- Policies (allow all for anon users - honor system)
 CREATE POLICY "Allow all" ON jungle_games FOR ALL USING (true) WITH CHECK (true);
@@ -125,3 +137,4 @@ CREATE POLICY "Allow all" ON jungle_prop_picks FOR ALL USING (true) WITH CHECK (
 CREATE POLICY "Allow all" ON jungle_prop_results FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all" ON jungle_player_availability FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all" ON jungle_scores FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all" ON jungle_weekly_highlights FOR ALL USING (true) WITH CHECK (true);

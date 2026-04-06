@@ -1,5 +1,12 @@
 'use client'
 
+/**
+ * PlayerSelect — Roster picker component.
+ * Shows player photo cards (full-bleed) with name overlay.
+ * Photos load from /players/{name}.png only; jay/tommy/neo use initials until photos are added.
+ * Compact mode renders as a pill with circular photo for use in nav areas.
+ */
+
 import { useState, useEffect, useRef } from 'react'
 import { BETTORS, Bettor, Player } from '@/lib/constants'
 
@@ -9,19 +16,70 @@ interface PlayerSelectProps {
   compact?: boolean
 }
 
-const PHOTO_EXTENSIONS = ['png', 'jpg', 'JPG', 'jpeg', 'JPEG', 'PNG', 'webp', 'WEBP', 'heic', 'HEIC']
+// Players who have a photo in /public/players/{name}.png
+const PLAYERS_WITH_PHOTOS = new Set([
+  'joshua', 'ronit', 'aarnav', 'evan', 'andrew', 'rohit', 'teja', 'aiyan', 'salil',
+])
 
-// Tries each extension in order, falls back to initial avatar if none found
-function PlayerPhoto({ name, color, isSelected }: { name: string; color: string; isSelected: boolean }) {
-  const [extIndex, setExtIndex] = useState(0)
-  const failed = extIndex >= PHOTO_EXTENSIONS.length
+// Each player gets a fixed hue for avatar ring consistency
+const PLAYER_HUES: Record<string, string> = {
+  joshua:  '#22c55e',
+  ronit:   '#f59e0b',
+  aarnav:  '#06b6d4',
+  evan:    '#a855f7',
+  andrew:  '#f97316',
+  rohit:   '#ec4899',
+  teja:    '#10b981',
+  aiyan:   '#3b82f6',
+  salil:   '#eab308',
+  Jay:     '#8b5cf6',
+  Tommy:   '#84cc16',
+  Neo:     '#d946ef',
+}
+
+// Full-bleed square photo for the roster grid
+function PlayerPhotoSquare({ name, color, isSelected }: { name: string; color: string; isSelected: boolean }) {
+  const hasPhoto = PLAYERS_WITH_PHOTOS.has(name)
+
+  if (!hasPhoto) {
+    return (
+      <div
+        className="absolute inset-0 flex items-center justify-center"
+        style={{
+          background: isSelected
+            ? `radial-gradient(circle at 40% 35%, ${color}25, ${color}08)`
+            : 'rgba(6, 11, 8, 0.8)',
+          color: isSelected ? color : 'var(--text-muted)',
+          fontFamily: "'Bebas Neue', 'Impact', sans-serif",
+          fontSize: '1.75rem',
+          fontWeight: 900,
+          letterSpacing: '0.04em',
+        }}
+      >
+        {name.charAt(0).toUpperCase()}
+      </div>
+    )
+  }
+
+  return (
+    <img
+      src={`/players/${name}.png`}
+      alt={name}
+      className="absolute inset-0 w-full h-full object-cover object-top"
+    />
+  )
+}
+
+// Circular photo for compact pill mode
+function PlayerPhotoCircle({ name, color, isSelected }: { name: string; color: string; isSelected: boolean }) {
+  const hasPhoto = PLAYERS_WITH_PHOTOS.has(name)
 
   const ringStyle = {
     border: isSelected ? `2px solid ${color}` : '1.5px solid rgba(34, 197, 94, 0.12)',
     transition: 'border-color 0.18s ease',
   }
 
-  if (failed) {
+  if (!hasPhoto) {
     return (
       <div
         className="w-10 h-10 rounded-full shrink-0 flex items-center justify-center"
@@ -44,32 +102,28 @@ function PlayerPhoto({ name, color, isSelected }: { name: string; color: string;
   return (
     <div className="w-10 h-10 rounded-full shrink-0 overflow-hidden" style={ringStyle}>
       <img
-        src={`/players/${name}.${PHOTO_EXTENSIONS[extIndex]}`}
+        src={`/players/${name}.png`}
         alt={name}
         className="w-full h-full object-cover"
-        onError={() => setExtIndex(i => i + 1)}
       />
     </div>
   )
 }
 
-// Full-bleed square photo for the roster grid
-function PlayerPhotoSquare({ name, color, isSelected }: { name: string; color: string; isSelected: boolean }) {
-  const [extIndex, setExtIndex] = useState(0)
-  const failed = extIndex >= PHOTO_EXTENSIONS.length
+// Small circular avatar (with photo or initial)
+function PlayerPhotoSmall({ name, color }: { name: string; color: string }) {
+  const hasPhoto = PLAYERS_WITH_PHOTOS.has(name)
 
-  if (failed) {
+  if (!hasPhoto) {
     return (
       <div
-        className="absolute inset-0 flex items-center justify-center"
+        className="w-7 h-7 rounded-full shrink-0 flex items-center justify-center"
         style={{
-          background: isSelected
-            ? `radial-gradient(circle at 40% 35%, ${color}25, ${color}08)`
-            : 'rgba(6, 11, 8, 0.8)',
-          color: isSelected ? color : 'var(--text-muted)',
+          background: `radial-gradient(circle at 35% 35%, ${color}22, ${color}08)`,
+          border: `1.5px solid ${color}55`,
+          color,
           fontFamily: "'Bebas Neue', 'Impact', sans-serif",
-          fontSize: '1.75rem',
-          fontWeight: 900,
+          fontSize: '0.875rem',
           letterSpacing: '0.04em',
         }}
       >
@@ -79,45 +133,11 @@ function PlayerPhotoSquare({ name, color, isSelected }: { name: string; color: s
   }
 
   return (
-    <img
-      src={`/players/${name}.${PHOTO_EXTENSIONS[extIndex]}`}
-      alt={name}
-      className="absolute inset-0 w-full h-full object-cover object-top"
-      onError={() => setExtIndex(i => i + 1)}
-    />
-  )
-}
-
-// Each player gets a fixed hue for their avatar ring so it's always consistent
-const PLAYER_HUES: Record<string, string> = {
-  joshua:  '#22c55e',
-  ronit:   '#f59e0b',
-  aarnav:  '#06b6d4',
-  evan:    '#a855f7',
-  andrew:  '#f97316',
-  rohit:   '#ec4899',
-  teja:    '#10b981',
-  aiyan:   '#3b82f6',
-  salil:   '#eab308',
-}
-
-function Avatar({ name, size = 'md' }: { name: string; size?: 'sm' | 'md' }) {
-  const initial = name.charAt(0).toUpperCase()
-  const color = PLAYER_HUES[name] || '#22c55e'
-  const dim = size === 'sm' ? 'w-7 h-7 text-xs' : 'w-11 h-11 text-base'
-
-  return (
     <div
-      className={`${dim} rounded-full flex items-center justify-center font-black shrink-0`}
-      style={{
-        background: `radial-gradient(circle at 35% 35%, ${color}22, ${color}08)`,
-        border: `1.5px solid ${color}55`,
-        color,
-        fontFamily: "'Bebas Neue', 'Impact', sans-serif",
-        letterSpacing: '0.04em',
-      }}
+      className="w-7 h-7 rounded-full shrink-0 overflow-hidden"
+      style={{ border: `1.5px solid ${color}55` }}
     >
-      {initial}
+      <img src={`/players/${name}.png`} alt={name} className="w-full h-full object-cover" />
     </div>
   )
 }
@@ -150,19 +170,20 @@ export default function PlayerSelect({ onSelect, selected, compact }: PlayerSele
     }
   }
 
-  /* Compact mode: pill showing current player + [switch] */
+  /* Compact mode: pill showing current player photo + name + [switch] */
   if (compact && currentPlayer && !showPicker) {
+    const color = PLAYER_HUES[currentPlayer] || '#22c55e'
     return (
       <button
         onClick={() => setShowPicker(true)}
         className="flex items-center gap-2 px-3 py-1.5 rounded-xl transition-all"
         style={{
           background: 'rgba(6, 11, 8, 0.7)',
-          border: `1px solid ${PLAYER_HUES[currentPlayer] || '#22c55e'}44`,
+          border: `1px solid ${color}44`,
         }}
       >
-        <Avatar name={currentPlayer} size="sm" />
-        <span className="text-sm font-semibold capitalize" style={{ color: PLAYER_HUES[currentPlayer] || '#22c55e' }}>
+        <PlayerPhotoSmall name={currentPlayer} color={color} />
+        <span className="text-sm font-semibold capitalize" style={{ color }}>
           {currentPlayer}
         </span>
         <span
@@ -216,7 +237,7 @@ export default function PlayerSelect({ onSelect, selected, compact }: PlayerSele
                 transition: 'all 0.18s ease',
               }}
             >
-              {/* Full-bleed photo */}
+              {/* Full-bleed photo or initial */}
               <PlayerPhotoSquare name={player} color={color} isSelected={isSelected} />
 
               {/* Name overlay at bottom */}

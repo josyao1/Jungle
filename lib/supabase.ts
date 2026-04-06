@@ -103,15 +103,20 @@ export interface Score {
   created_at: string
 }
 
-// Returns the set of players marked inactive for a given game_id.
-// Empty set = everyone active (default when no availability rows exist).
-export async function getInactivePlayersForGame(gameId: string): Promise<Set<string>> {
+// Returns a Map<playerName, label> for inactive players only.
+// Use .has(player) to check inactive, .get(player) ?? 'OUT' for display label.
+// Empty map = everyone active (default when no availability rows exist).
+export async function getInactivePlayersForGame(gameId: string): Promise<Map<string, string>> {
   const { data } = await supabase
     .from('jungle_player_availability')
-    .select('player, active')
+    .select('player, active, reason')
     .eq('game_id', gameId)
 
-  if (!data || data.length === 0) return new Set()
+  if (!data || data.length === 0) return new Map()
 
-  return new Set(data.filter(row => !row.active).map(row => row.player))
+  const map = new Map<string, string>()
+  data.filter(row => !row.active).forEach(row => {
+    map.set(row.player, row.reason || 'OUT')
+  })
+  return map
 }
