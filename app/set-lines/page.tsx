@@ -3,9 +3,9 @@
 export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback } from 'react'
-import { PLAYERS, STATS, STAT_LABELS, GAMES, getGamePhase, Player, Stat, isPlayerInjured, getRosterForGame } from '@/lib/constants'
+import { PLAYERS, STATS, STAT_LABELS, GAMES, getGamePhase, sortWithInactiveAtBottom, Player, Stat } from '@/lib/constants'
 import PlayerSelect from '@/components/PlayerSelect'
-import { supabase } from '@/lib/supabase'
+import { supabase, getInactivePlayersForGame } from '@/lib/supabase'
 
 export default function SetLinesPage() {
   const [player, setPlayer] = useState<Player | null>(null)
@@ -16,25 +16,21 @@ export default function SetLinesPage() {
   const [saving, setSaving] = useState(false)
   const [phase, setPhase] = useState<string>('open')
   const [gameNumber, setGameNumber] = useState<number>(1)
+  const [inactivePlayers, setInactivePlayers] = useState<Set<string>>(new Set())
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     const initial: Record<string, Record<string, string>> = {}
     PLAYERS.forEach(p => {
       initial[p] = {}
-      STATS.forEach(s => {
-        initial[p][s] = ''
-      })
+      STATS.forEach(s => { initial[p][s] = '' })
     })
     setPredictions(initial)
   }, [])
 
   const loadData = useCallback(async () => {
     const savedPlayer = localStorage.getItem('jungle_player') as Player | null
-    if (!savedPlayer) {
-      setLoading(false)
-      return
-    }
+    if (!savedPlayer) { setLoading(false); return }
     setPlayer(savedPlayer)
 
     const now = new Date()
@@ -48,20 +44,21 @@ export default function SetLinesPage() {
     setGameNumber(currentGame.number)
 
     let { data: games } = await supabase
-      .from('games')
+      .from('jungle_games')
       .select('id')
       .eq('game_number', currentGame.number)
       .single()
 
     if (!games) {
       const { data: newGame, error: createError } = await supabase
-        .from('games')
+        .from('jungle_games')
         .insert({
           game_number: currentGame.number,
           game_date: currentGame.date.toISOString(),
           lines_lock_time: currentGame.lockTime.toISOString(),
           picks_lock_time: currentGame.lockTime.toISOString(),
-          status: 'upcoming'
+          status: 'upcoming',
+          forfeited: false,
         })
         .select('id')
         .single()
@@ -75,8 +72,11 @@ export default function SetLinesPage() {
     }
     setGameId(games.id)
 
+    const inactive = await getInactivePlayersForGame(games.id)
+    setInactivePlayers(inactive)
+
     const { data: existingPredictions } = await supabase
-      .from('line_predictions')
+      .from('jungle_line_predictions')
       .select('*')
       .eq('game_id', games.id)
 
@@ -99,17 +99,12 @@ export default function SetLinesPage() {
     setLoading(false)
   }, [])
 
-  useEffect(() => {
-    loadData()
-  }, [loadData])
+  useEffect(() => { loadData() }, [loadData])
 
   const handleChange = (targetPlayer: string, stat: string, value: string) => {
     setPredictions(prev => ({
       ...prev,
-      [targetPlayer]: {
-        ...prev[targetPlayer],
-        [stat]: value,
-      },
+      [targetPlayer]: { ...prev[targetPlayer], [stat]: value },
     }))
   }
 
@@ -121,31 +116,20 @@ export default function SetLinesPage() {
     setSaving(true)
     setError(null)
 
-    const toInsert: Array<{
-      game_id: string
-      submitter: string
-      player: string
-      stat: string
-      value: number
-    }> = []
+    const toInsert: Array<{ game_id: string; submitter: string; player: string; stat: string; value: number }> = []
 
     PLAYERS.forEach(p => {
+      if (inactivePlayers.has(p)) return
       STATS.forEach(s => {
         const val = predictions[p]?.[s]
         if (val !== '' && val !== undefined) {
-          toInsert.push({
-            game_id: gameId,
-            submitter: player,
-            player: p,
-            stat: s,
-            value: parseFloat(val),
-          })
+          toInsert.push({ game_id: gameId, submitter: player, player: p, stat: s, value: parseFloat(val) })
         }
       })
     })
 
     const { error: deleteError } = await supabase
-      .from('line_predictions')
+      .from('jungle_line_predictions')
       .delete()
       .eq('game_id', gameId)
       .eq('submitter', player)
@@ -157,7 +141,7 @@ export default function SetLinesPage() {
     }
 
     if (toInsert.length > 0) {
-      const { error: insertError } = await supabase.from('line_predictions').insert(toInsert)
+      const { error: insertError } = await supabase.from('jungle_line_predictions').insert(toInsert)
       if (insertError) {
         setError(`Insert failed: ${insertError.message}`)
         setSaving(false)
@@ -170,15 +154,13 @@ export default function SetLinesPage() {
     setSaving(false)
   }
 
-  if (loading) {
-    return <div className="text-center py-8 text-slate-500">Loading...</div>
-  }
+  if (loading) return <div className="text-center py-12 text-slate-500">Loading...</div>
 
   if (!player) {
     return (
-      <div className="text-center py-8">
+      <div className="text-center py-12">
         <p className="mb-4 text-slate-500">Select your name first</p>
-        <a href="/" className="text-court-accent hover:underline">Go to home</a>
+        <a href="/" className="text-emerald-400 hover:underline">Go to home</a>
       </div>
     )
   }
@@ -193,19 +175,19 @@ export default function SetLinesPage() {
       </div>
 
       {error && (
-        <div className="glass-card rounded-xl p-4 border-red-500/30">
+        <div className="glass-card rounded-xl p-4 border border-red-500/30">
           <p className="text-red-400 text-sm">{error}</p>
         </div>
       )}
 
       {isLocked && (
-        <div className="glass-card rounded-xl p-4 border-yellow-500/30">
+        <div className="glass-card rounded-xl p-4 border border-yellow-500/30">
           <p className="text-yellow-400 text-sm">Lines are locked. View only.</p>
         </div>
       )}
 
       {submitted && !isLocked && (
-        <div className="glass-card rounded-xl p-4 border-green-500/30">
+        <div className="glass-card rounded-xl p-4 border border-green-500/30">
           <p className="text-green-400 text-sm">Predictions submitted! You can update until lock.</p>
         </div>
       )}
@@ -222,24 +204,24 @@ export default function SetLinesPage() {
               </tr>
             </thead>
             <tbody>
-              {getRosterForGame(gameNumber).map(targetPlayer => {
-                const injured = isPlayerInjured(targetPlayer, gameNumber)
+              {sortWithInactiveAtBottom(PLAYERS, inactivePlayers).map(targetPlayer => {
+                const isInactive = inactivePlayers.has(targetPlayer)
                 return (
-                  <tr key={targetPlayer} className={injured ? 'player-injured' : ''}>
+                  <tr key={targetPlayer} className={isInactive ? 'player-inactive' : ''}>
                     <td className="capitalize font-medium">
-                      {targetPlayer}
-                      {injured && <span className="badge badge-ir ml-2">IR</span>}
+                      <span>{targetPlayer}</span>
+                      {isInactive && <span className="badge badge-out ml-2">O</span>}
                     </td>
                     {STATS.map(stat => (
                       <td key={stat} className="text-center">
-                        {injured ? (
-                          <span className="text-slate-600">—</span>
+                        {isInactive ? (
+                          <span className="text-slate-700">—</span>
                         ) : (
                           <input
                             type="number"
                             min="0"
                             step="1"
-                            placeholder="-"
+                            placeholder="—"
                             value={predictions[targetPlayer]?.[stat] ?? ''}
                             onChange={(e) => handleChange(targetPlayer, stat, e.target.value)}
                             disabled={isLocked}
@@ -263,9 +245,7 @@ export default function SetLinesPage() {
               const cleared: Record<string, Record<string, string>> = {}
               PLAYERS.forEach(p => {
                 cleared[p] = {}
-                STATS.forEach(s => {
-                  cleared[p][s] = ''
-                })
+                STATS.forEach(s => { cleared[p][s] = '' })
               })
               setPredictions(cleared)
             }}

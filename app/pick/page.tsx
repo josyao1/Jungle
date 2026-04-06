@@ -3,9 +3,9 @@
 export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback } from 'react'
-import { PLAYERS, STATS, STAT_LABELS, PROP_BETS, PROP_BET_LABELS, GAMES, getGamePhase, Player, Stat, PropBet, isPlayerInjured, isPlayerOnRoster, getRosterForGame } from '@/lib/constants'
+import { PLAYERS, STATS, STAT_LABELS, GAMES, PROP_BETS, PROP_BET_LABELS, getGamePhase, sortWithInactiveAtBottom, Player, Stat } from '@/lib/constants'
 import PlayerSelect from '@/components/PlayerSelect'
-import { supabase, Line, Pick, PropPick } from '@/lib/supabase'
+import { supabase, Line, Pick, getInactivePlayersForGame } from '@/lib/supabase'
 import { calculateAveragedLine } from '@/lib/utils'
 
 export default function PickPage() {
@@ -14,12 +14,13 @@ export default function PickPage() {
   const [selectedWeek, setSelectedWeek] = useState<number>(1)
   const [lines, setLines] = useState<Line[]>([])
   const [picks, setPicks] = useState<Record<string, Record<string, boolean>>>({})
-  const [propPicks, setPropPicks] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [phase, setPhase] = useState<string>('lines_open')
+  const [phase, setPhase] = useState<string>('open')
   const [results, setResults] = useState<Array<{ player: string; stat: string; value: number }>>([])
   const [userPredictions, setUserPredictions] = useState<Array<{ player: string; stat: string; value: number }>>([])
+  const [inactivePlayers, setInactivePlayers] = useState<Set<string>>(new Set())
+  const [propPicks, setPropPicks] = useState<Record<string, string>>({})
   const [propResults, setPropResults] = useState<Record<string, string>>({})
   const [autoPickedCells, setAutoPickedCells] = useState<Array<{ player: string; stat: string }>>([])
   const [showAutoPickAlert, setShowAutoPickAlert] = useState(false)
@@ -40,81 +41,85 @@ export default function PickPage() {
     }) || GAMES[GAMES.length - 1]
 
     const gameToLoad = weekNum ? GAMES.find(g => g.number === weekNum) || currentGame : currentGame
-    if (!weekNum) {
-      setSelectedWeek(currentGame.number)
-    }
+    if (!weekNum) setSelectedWeek(currentGame.number)
 
     const currentPhase = getGamePhase(gameToLoad)
     setPhase(currentPhase)
 
     let { data: games } = await supabase
-      .from('games')
+      .from('jungle_games')
       .select('id')
       .eq('game_number', gameToLoad.number)
       .single()
 
     if (!games) {
       const { data: newGame } = await supabase
-        .from('games')
+        .from('jungle_games')
         .insert({
           game_number: gameToLoad.number,
           game_date: gameToLoad.date.toISOString(),
           lines_lock_time: gameToLoad.lockTime.toISOString(),
           picks_lock_time: gameToLoad.lockTime.toISOString(),
-          status: 'upcoming'
+          status: 'upcoming',
+          forfeited: false,
         })
         .select('id')
         .single()
 
-      if (!newGame) {
-        setLoading(false)
-        return
-      }
+      if (!newGame) { setLoading(false); return }
       games = newGame
     }
     setGameId(games.id)
 
-    await calculateAndSaveLines(games.id)
+    const inactive = await getInactivePlayersForGame(games.id)
+    setInactivePlayers(inactive)
+    const active = PLAYERS.filter(p => !inactive.has(p))
+
+    await calculateAndSaveLines(games.id, active)
     const { data: liveLines } = await supabase
-      .from('lines')
+      .from('jungle_lines')
       .select('*')
       .eq('game_id', games.id)
-
     setLines(liveLines || [])
 
-    // Fetch results for correct/incorrect display on past picks
     const { data: gameResults } = await supabase
-      .from('results')
+      .from('jungle_results')
       .select('*')
       .eq('game_id', games.id)
     setResults(gameResults || [])
 
-    // Fetch prop results for correct/incorrect display on past picks
-    const { data: gamePropResults } = await supabase
-      .from('prop_results')
-      .select('*')
-      .eq('game_id', games.id)
-    const propResultsMap: Record<string, string> = {}
-    gamePropResults?.forEach((pr: any) => {
-      propResultsMap[pr.prop_type] = pr.winner
-    })
-    setPropResults(propResultsMap)
-
-    // Fetch user's line predictions for auto-pick logic
     const { data: userPreds } = await supabase
-      .from('line_predictions')
+      .from('jungle_line_predictions')
       .select('*')
       .eq('game_id', games.id)
       .eq('submitter', savedPlayer)
     setUserPredictions(userPreds || [])
 
+    // Load prop picks
+    const { data: existingPropPicks } = await supabase
+      .from('jungle_prop_picks')
+      .select('*')
+      .eq('game_id', games.id)
+      .eq('picker', savedPlayer)
+    const propPicksMap: Record<string, string> = {}
+    existingPropPicks?.forEach((p: any) => { propPicksMap[p.prop_type] = p.player_picked })
+    setPropPicks(propPicksMap)
+
+    // Load prop results for display
+    const { data: gamePropResults } = await supabase
+      .from('jungle_prop_results')
+      .select('*')
+      .eq('game_id', games.id)
+    const propResultsMap: Record<string, string> = {}
+    gamePropResults?.forEach((pr: any) => { propResultsMap[pr.prop_type] = pr.winner })
+    setPropResults(propResultsMap)
+
     const { data: existingPicks } = await supabase
-      .from('picks')
+      .from('jungle_picks')
       .select('*')
       .eq('game_id', games.id)
       .eq('picker', savedPlayer)
 
-    // Load existing picks or start fresh
     const picksMap: Record<string, Record<string, boolean>> = {}
     PLAYERS.forEach(p => {
       picksMap[p] = {}
@@ -124,16 +129,14 @@ export default function PickPage() {
       })
     })
 
-    // Auto-pick on every load: if aggregated line < user's prediction, pick it
-    // Never un-pick something already chosen
     const autoPickOff = localStorage.getItem(`jungle_autopick_off_week_${gameToLoad.number}`)
     setAutoPickDisabled(!!autoPickOff)
     const newAutoPicked: Array<{ player: string; stat: string }> = []
 
     if (!autoPickOff && currentPhase !== 'locked' && userPreds && liveLines) {
-      PLAYERS.forEach(p => {
+      PLAYERS.filter(p => !inactive.has(p)).forEach(p => {
         STATS.forEach(s => {
-          if (picksMap[p][s]) return // Already picked, never un-pick
+          if (picksMap[p][s]) return
           const userPred = userPreds.find((pred: any) => pred.player === p && pred.stat === s)
           const aggLine = (liveLines || []).find((l: any) => l.player === p && l.stat === s)
           if (userPred && aggLine && aggLine.value < userPred.value) {
@@ -147,21 +150,6 @@ export default function PickPage() {
     setPicks(picksMap)
     setAutoPickedCells(newAutoPicked)
     setShowAutoPickAlert(newAutoPicked.length > 0)
-
-    const { data: existingPropPicks } = await supabase
-      .from('prop_picks')
-      .select('*')
-      .eq('game_id', games.id)
-      .eq('picker', savedPlayer)
-
-    if (existingPropPicks) {
-      const loaded: Record<string, string> = {}
-      existingPropPicks.forEach(p => {
-        loaded[p.prop_type] = p.player_picked
-      })
-      setPropPicks(loaded)
-    }
-
     setLoading(false)
   }, [])
 
@@ -171,65 +159,45 @@ export default function PickPage() {
     loadData(weekNum)
   }
 
-  const calculateAndSaveLines = async (gId: string) => {
+  const calculateAndSaveLines = async (gId: string, active: string[]) => {
     const { data: predictions } = await supabase
-      .from('line_predictions')
+      .from('jungle_line_predictions')
       .select('*')
       .eq('game_id', gId)
 
-    await supabase.from('lines').delete().eq('game_id', gId)
-
+    await supabase.from('jungle_lines').delete().eq('game_id', gId)
     if (!predictions || predictions.length === 0) return
 
-    const linesToInsert: Array<{
-      game_id: string
-      player: string
-      stat: string
-      value: number
-    }> = []
+    const linesToInsert: Array<{ game_id: string; player: string; stat: string; value: number }> = []
 
-    PLAYERS.forEach(p => {
+    active.forEach(p => {
       STATS.forEach(s => {
         const values = predictions
           .filter(pred => pred.player === p && pred.stat === s)
           .map(pred => pred.value)
-
         if (values.length > 0) {
-          linesToInsert.push({
-            game_id: gId,
-            player: p,
-            stat: s,
-            value: calculateAveragedLine(values),
-          })
+          linesToInsert.push({ game_id: gId, player: p, stat: s, value: calculateAveragedLine(values) })
         }
       })
     })
 
     if (linesToInsert.length > 0) {
-      await supabase.from('lines').insert(linesToInsert)
+      await supabase.from('jungle_lines').insert(linesToInsert)
     }
   }
 
-  useEffect(() => {
-    loadData()
-  }, [loadData])
+  useEffect(() => { loadData() }, [loadData])
 
   const togglePick = (targetPlayer: string, stat: string) => {
     setPicks(prev => ({
       ...prev,
-      [targetPlayer]: {
-        ...prev[targetPlayer],
-        [stat]: !prev[targetPlayer]?.[stat],
-      },
+      [targetPlayer]: { ...prev[targetPlayer], [stat]: !prev[targetPlayer]?.[stat] },
     }))
   }
 
-  const handleDismissAutoPick = () => {
-    setShowAutoPickAlert(false)
-  }
+  const handleDismissAutoPick = () => setShowAutoPickAlert(false)
 
   const handleTurnOffAutoPick = () => {
-    // Undo the auto-picked cells
     setPicks(prev => {
       const updated = { ...prev }
       autoPickedCells.forEach(({ player: p, stat: s }) => {
@@ -237,7 +205,6 @@ export default function PickPage() {
       })
       return updated
     })
-    // Remember for this week
     localStorage.setItem(`jungle_autopick_off_week_${selectedWeek}`, 'true')
     setAutoPickDisabled(true)
     setAutoPickedCells([])
@@ -247,46 +214,28 @@ export default function PickPage() {
   const handleTurnOnAutoPick = () => {
     localStorage.removeItem(`jungle_autopick_off_week_${selectedWeek}`)
     setAutoPickDisabled(false)
-    // Re-run load to apply auto-picks
     setLoading(true)
     loadData(selectedWeek)
-  }
-
-  const handlePropPick = (propType: string, pickedPlayer: string) => {
-    setPropPicks(prev => ({
-      ...prev,
-      [propType]: pickedPlayer,
-    }))
   }
 
   const handleSubmit = async () => {
     if (!player || !gameId) return
     setSaving(true)
 
-    const picksToInsert: Array<{
-      game_id: string
-      picker: string
-      player: string
-      stat: string
-      picked: boolean
-      locked: boolean
-    }> = []
+    const picksToInsert = PLAYERS.filter(p => !inactivePlayers.has(p)).flatMap(p =>
+      STATS.map(s => ({
+        game_id: gameId,
+        picker: player,
+        player: p,
+        stat: s,
+        picked: picks[p]?.[s] || false,
+        locked: phase === 'locked',
+      }))
+    )
 
-    getRosterForGame(selectedWeek).forEach(p => {
-      STATS.forEach(s => {
-        picksToInsert.push({
-          game_id: gameId,
-          picker: player,
-          player: p,
-          stat: s,
-          picked: picks[p]?.[s] || false,
-          locked: phase === 'game_started',
-        })
-      })
-    })
+    await supabase.from('jungle_picks').upsert(picksToInsert, { onConflict: 'game_id,picker,player,stat' })
 
-    await supabase.from('picks').upsert(picksToInsert, { onConflict: 'game_id,picker,player,stat' })
-
+    // Save prop picks
     const propPicksToInsert = Object.entries(propPicks)
       .filter(([, pickedPlayer]) => pickedPlayer)
       .map(([propType, pickedPlayer]) => ({
@@ -295,9 +244,8 @@ export default function PickPage() {
         prop_type: propType,
         player_picked: pickedPlayer,
       }))
-
     if (propPicksToInsert.length > 0) {
-      await supabase.from('prop_picks').upsert(propPicksToInsert, { onConflict: 'game_id,picker,prop_type' })
+      await supabase.from('jungle_prop_picks').upsert(propPicksToInsert, { onConflict: 'game_id,picker,prop_type' })
     }
 
     setSaving(false)
@@ -309,40 +257,36 @@ export default function PickPage() {
     return line?.value ?? null
   }
 
-  if (loading) {
-    return <div className="text-center py-8 text-slate-500">Loading...</div>
-  }
-
-  if (!player) {
-    return (
-      <div className="text-center py-8">
-        <p className="mb-4 text-slate-500">Select your name first</p>
-        <a href="/" className="text-court-accent hover:underline">Go to home</a>
-      </div>
-    )
-  }
-
-  const isLocked = phase === 'locked'
-
-  const getPickResult = (targetPlayer: string, stat: string): 'correct' | 'incorrect' | null => {
-    if (!isLocked) return null
-    const isPicked = picks[targetPlayer]?.[stat]
-    if (!isPicked) return null
-    const line = getLine(targetPlayer, stat)
-    const result = results.find(r => r.player === targetPlayer && r.stat === stat)
-    if (line === null || !result) return null
-    return result.value >= line ? 'correct' : 'incorrect'
-  }
-
   const getPropPickResult = (propType: string, pickedPlayer: string): 'correct' | 'incorrect' | null => {
-    if (!isLocked) return null
-    if (!propPicks[propType]) return null
+    if (phase !== 'locked') return null
+    if (propPicks[propType] !== pickedPlayer) return null
     const winnerStr = propResults[propType]
     if (!winnerStr) return null
     const winners = winnerStr.split(',').map(w => w.trim())
     return winners.includes(pickedPlayer) ? 'correct' : 'incorrect'
   }
 
+  const getPickResult = (targetPlayer: string, stat: string): 'correct' | 'incorrect' | null => {
+    if (phase !== 'locked') return null
+    if (!picks[targetPlayer]?.[stat]) return null
+    const line = getLine(targetPlayer, stat)
+    const result = results.find(r => r.player === targetPlayer && r.stat === stat)
+    if (line === null || !result) return null
+    return result.value >= line ? 'correct' : 'incorrect'
+  }
+
+  if (loading) return <div className="text-center py-12 text-slate-500">Loading...</div>
+
+  if (!player) {
+    return (
+      <div className="text-center py-12">
+        <p className="mb-4 text-slate-500">Select your name first</p>
+        <a href="/" className="text-emerald-400 hover:underline">Go to home</a>
+      </div>
+    )
+  }
+
+  const isLocked = phase === 'locked'
   const now = new Date()
   const currentGameNum = (GAMES.find(g => {
     const gameEnd = new Date(g.date.getTime() + 3 * 60 * 60 * 1000)
@@ -352,7 +296,7 @@ export default function PickPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-xl md:text-2xl font-bold">Make Picks - {GAMES.find(g => g.number === selectedWeek)?.label || `Week ${selectedWeek}`}</h1>
+        <h1 className="text-xl md:text-2xl font-bold">Make Picks — {GAMES.find(g => g.number === selectedWeek)?.label || `Week ${selectedWeek}`}</h1>
         <PlayerSelect onSelect={setPlayer} selected={player} compact />
       </div>
 
@@ -370,60 +314,49 @@ export default function PickPage() {
       </div>
 
       {!isLocked && (
-        <button
-          onClick={handleSubmit}
-          disabled={saving}
-          className="w-full btn-accent py-3 rounded-xl text-sm font-semibold disabled:opacity-50"
-        >
+        <button onClick={handleSubmit} disabled={saving}
+          className="w-full btn-accent py-3 rounded-xl text-sm font-semibold disabled:opacity-50">
           {saving ? 'Saving...' : 'Save Picks'}
         </button>
       )}
 
       {isLocked && (
-        <div className="glass-card rounded-xl p-4 border-red-500/30">
+        <div className="glass-card rounded-xl p-4 border border-red-500/30">
           <p className="text-red-400 text-sm">Picks are locked. Game has started!</p>
         </div>
       )}
 
       {!isLocked && lines.length === 0 && (
-        <div className="glass-card rounded-xl p-4 border-yellow-500/30">
-          <p className="text-yellow-400 text-sm">No lines yet. Set some lines first!</p>
+        <div className="glass-card rounded-xl p-4 border border-yellow-500/30">
+          <p className="text-yellow-400 text-sm">No lines yet — set some lines first!</p>
         </div>
       )}
 
       {showAutoPickAlert && (
-        <div className="glass-card rounded-xl p-4 border-blue-500/30">
+        <div className="glass-card rounded-xl p-4 border border-blue-500/30">
           <p className="text-blue-400 text-sm mb-2">
-            Auto-picked {autoPickedCells.length} over{autoPickedCells.length > 1 ? 's' : ''} where the line is {'>'}1 below your prediction:
+            Auto-picked {autoPickedCells.length} over{autoPickedCells.length > 1 ? 's' : ''} where the line is below your prediction
           </p>
           <p className="text-slate-400 text-xs mb-3 capitalize">
             {autoPickedCells.map(c => `${c.player} ${STAT_LABELS[c.stat as Stat]}`).join(', ')}
           </p>
           <div className="flex gap-2">
-            <button onClick={handleDismissAutoPick} className="btn-secondary px-3 py-1.5 rounded-lg text-xs">
-              Got It
-            </button>
-            <button onClick={handleTurnOffAutoPick} className="btn-secondary px-3 py-1.5 rounded-lg text-xs text-red-400">
-              Turn Off For This Week
-            </button>
+            <button onClick={handleDismissAutoPick} className="btn-secondary px-3 py-1.5 rounded-lg text-xs">Got It</button>
+            <button onClick={handleTurnOffAutoPick} className="btn-secondary px-3 py-1.5 rounded-lg text-xs text-red-400">Turn Off For This Week</button>
           </div>
         </div>
       )}
 
       {!isLocked && autoPickDisabled && !showAutoPickAlert && (
-        <div className="glass-card rounded-xl p-3 border-slate-500/20 flex items-center justify-between">
+        <div className="glass-card rounded-xl p-3 border border-slate-500/20 flex items-center justify-between">
           <p className="text-slate-500 text-xs">Auto-pick is off for this week</p>
-          <button onClick={handleTurnOnAutoPick} className="btn-secondary px-3 py-1 rounded-lg text-xs text-blue-400">
-            Turn On
-          </button>
+          <button onClick={handleTurnOnAutoPick} className="btn-secondary px-3 py-1 rounded-lg text-xs text-blue-400">Turn On</button>
         </div>
       )}
 
       <div className="glass-card rounded-2xl p-4 md:p-6">
-        <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-2">Line Picks</h2>
-        <p className="text-slate-500 text-sm mb-4">
-          Tap to bet on the over. Support the squad!
-        </p>
+        <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-1">Line Picks</h2>
+        <p className="text-slate-500 text-sm mb-4">Tap to bet the over. Support the squad!</p>
 
         <div className="overflow-x-auto mobile-scroll -mx-4 px-4 md:mx-0 md:px-0">
           <table className="glass-table">
@@ -436,26 +369,21 @@ export default function PickPage() {
               </tr>
             </thead>
             <tbody>
-              {getRosterForGame(selectedWeek).map(targetPlayer => {
-                const injured = isPlayerInjured(targetPlayer, selectedWeek)
+              {sortWithInactiveAtBottom(PLAYERS, inactivePlayers).map(targetPlayer => {
+                const isInactive = inactivePlayers.has(targetPlayer)
                 return (
-                  <tr key={targetPlayer} className={injured ? 'player-injured' : ''}>
+                  <tr key={targetPlayer} className={isInactive ? 'player-inactive' : ''}>
                     <td className="capitalize font-medium">
-                      {targetPlayer}
-                      {injured && <span className="badge badge-ir ml-2">IR</span>}
+                      <span>{targetPlayer}</span>
+                      {isInactive && <span className="badge badge-out ml-2">O</span>}
                     </td>
                     {STATS.map(stat => {
-                      if (injured) {
-                        return (
-                          <td key={stat} className="text-center">
-                            <span className="text-slate-600">—</span>
-                          </td>
-                        )
+                      if (isInactive) {
+                        return <td key={stat} className="text-center"><span className="text-slate-700">—</span></td>
                       }
                       const line = getLine(targetPlayer, stat)
                       const isPicked = picks[targetPlayer]?.[stat]
                       const pickResult = getPickResult(targetPlayer, stat)
-
                       return (
                         <td key={stat} className="text-center">
                           <button
@@ -467,7 +395,7 @@ export default function PickPage() {
                               : isPicked ? 'selected' : ''
                             } disabled:opacity-50`}
                           >
-                            {line !== null ? Math.max(0, line - 0.5) : '-'}
+                            {line !== null ? Math.max(0, line - 0.5) : '—'}
                           </button>
                         </td>
                       )
@@ -493,29 +421,29 @@ export default function PickPage() {
         </div>
       </div>
 
+      {/* Prop Bets */}
       <div className="glass-card rounded-2xl p-4 md:p-6">
         <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-4">Prop Bets</h2>
-
         <div className="space-y-6">
           {PROP_BETS.map(prop => (
             <div key={prop}>
-              <h3 className="text-sm text-slate-300 mb-3">{PROP_BET_LABELS[prop]}</h3>
-              <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
-                {getRosterForGame(selectedWeek).map(p => {
-                  const injured = isPlayerInjured(p, selectedWeek)
-                  const propResult = propPicks[prop] === p ? getPropPickResult(prop, p) : null
+              <h3 className="text-sm text-slate-300 mb-3 font-medium">{PROP_BET_LABELS[prop]}</h3>
+              <div className="grid grid-cols-3 gap-2">
+                {PLAYERS.filter(p => !inactivePlayers.has(p)).map(p => {
+                  const propResult = getPropPickResult(prop, p)
+                  const isSelected = propPicks[prop] === p
                   return (
                     <button
                       key={p}
-                      onClick={() => !isLocked && !injured && handlePropPick(prop, p)}
-                      disabled={isLocked || injured}
+                      onClick={() => !isLocked && setPropPicks(prev => ({ ...prev, [prop]: p }))}
+                      disabled={isLocked}
                       className={`px-2 py-3 rounded-lg text-xs capitalize font-medium transition-all pick-btn ${
                         propResult === 'correct' ? 'pick-correct'
                         : propResult === 'incorrect' ? 'pick-incorrect'
-                        : propPicks[prop] === p ? 'selected' : ''
-                      } ${injured ? 'player-injured' : ''} disabled:opacity-50`}
+                        : isSelected ? 'selected' : ''
+                      } disabled:opacity-50`}
                     >
-                      {p}{injured && ' (IR)'}
+                      {p}
                     </button>
                   )
                 })}

@@ -1,44 +1,47 @@
+/**
+ * utils.ts — Core utility functions for the Jungle Softball Sportsbook.
+ *
+ * calculateAveragedLine: Computes the consensus line from all player predictions
+ *   using IQR-based outlier removal to prevent trolling.
+ *
+ * calculateScores: Simplified scoring — +1 for correct over, -0.5 for missed over.
+ *   No prop bets, no exact-line bonuses.
+ *
+ * formatTimeRemaining: Human-readable countdown to game lock time.
+ */
+
 // Calculate averaged line with outlier removal using IQR method
 export function calculateAveragedLine(values: number[]): number {
   if (values.length === 0) return 0
   if (values.length === 1) return roundLine(values[0])
   if (values.length === 2) return roundLine((values[0] + values[1]) / 2)
 
-  // Sort values
   const sorted = [...values].sort((a, b) => a - b)
 
-  // Calculate Q1 and Q3
   const q1Index = Math.floor(sorted.length * 0.25)
   const q3Index = Math.floor(sorted.length * 0.75)
   const q1 = sorted[q1Index]
   const q3 = sorted[q3Index]
 
-  // Calculate IQR and bounds
   const iqr = q3 - q1
   const lowerBound = q1 - 1.5 * iqr
   const upperBound = q3 + 1.5 * iqr
 
-  // Filter outliers
   const filtered = sorted.filter(v => v >= lowerBound && v <= upperBound)
 
-  // If all values are outliers, just use the median
   if (filtered.length === 0) {
     const mid = Math.floor(sorted.length / 2)
     return roundLine(sorted[mid])
   }
 
-  // Calculate mean of filtered values
   const mean = filtered.reduce((sum, v) => sum + v, 0) / filtered.length
-
   return roundLine(mean)
 }
 
-// Round to nearest whole number
 export function roundLine(value: number): number {
   return Math.round(value)
 }
 
-// Format time remaining
 export function formatTimeRemaining(targetDate: Date): string {
   const now = new Date()
   const diff = targetDate.getTime() - now.getTime()
@@ -56,27 +59,22 @@ export function formatTimeRemaining(targetDate: Date): string {
   return `${hours}h ${minutes}m`
 }
 
-// Calculate scores for a game
+// Simplified scoring: right pick = +1, missed pick = -0.5, no bonuses
 export function calculateScores(
   picks: Array<{ picker: string; player: string; stat: string; picked: boolean }>,
   lines: Array<{ player: string; stat: string; value: number }>,
   results: Array<{ player: string; stat: string; value: number }>,
-  predictions: Array<{ submitter: string; player: string; stat: string; value: number }>,
-  propPicks: Array<{ picker: string; prop_type: string; player_picked: string }>,
-  propResults: Record<string, string>
-): Map<string, { correctPicks: number; missedPicks: number; exactLines: number; propWins: number; propMisses: number; totalPoints: number }> {
-  const scores = new Map<string, { correctPicks: number; missedPicks: number; exactLines: number; propWins: number; propMisses: number; totalPoints: number }>()
+): Map<string, { correctPicks: number; missedPicks: number; totalPoints: number }> {
+  const scores = new Map<string, { correctPicks: number; missedPicks: number; totalPoints: number }>()
 
-  // Create lookup maps
   const lineMap = new Map<string, number>()
   lines.forEach(l => lineMap.set(`${l.player}-${l.stat}`, l.value))
 
   const resultMap = new Map<string, number>()
   results.forEach(r => resultMap.set(`${r.player}-${r.stat}`, r.value))
 
-  // Calculate pick scores (only overs - did they hit the line?)
   picks.forEach(pick => {
-    if (!pick.picked) return // They didn't pick this line
+    if (!pick.picked) return
 
     const key = `${pick.player}-${pick.stat}`
     const line = lineMap.get(key)
@@ -84,59 +82,17 @@ export function calculateScores(
 
     if (line === undefined || result === undefined) return
 
-    const current = scores.get(pick.picker) || { correctPicks: 0, missedPicks: 0, exactLines: 0, propWins: 0, propMisses: 0, totalPoints: 0 }
+    const current = scores.get(pick.picker) || { correctPicks: 0, missedPicks: 0, totalPoints: 0 }
 
-    // Check if they hit (result >= line, since we're being supportive)
     if (result >= line) {
       current.correctPicks++
       current.totalPoints += 1
     } else {
-      // Missed the over - penalty
       current.missedPicks++
       current.totalPoints -= 0.5
     }
 
     scores.set(pick.picker, current)
-  })
-
-  // Calculate exact line bonus (only if both prediction and result exist and have real values)
-  predictions.forEach(pred => {
-    const key = `${pred.player}-${pred.stat}`
-    const result = resultMap.get(key)
-
-    // Skip if no result entered (blank/not tracked)
-    if (result === undefined || result === null) return
-
-    // Skip if prediction was blank (value of 0 is valid, but we need an actual prediction)
-    if (pred.value === undefined || pred.value === null) return
-
-    const current = scores.get(pred.submitter) || { correctPicks: 0, missedPicks: 0, exactLines: 0, propWins: 0, propMisses: 0, totalPoints: 0 }
-
-    // Exact match bonus
-    if (pred.value === result) {
-      current.exactLines++
-      current.totalPoints += 0.5
-    }
-
-    scores.set(pred.submitter, current)
-  })
-
-  // Calculate prop bet scores (no penalty for misses, ties count for all winners)
-  propPicks.forEach(prop => {
-    const current = scores.get(prop.picker) || { correctPicks: 0, missedPicks: 0, exactLines: 0, propWins: 0, propMisses: 0, totalPoints: 0 }
-
-    const winnerStr = propResults[prop.prop_type]
-    if (winnerStr) {
-      // Winners stored as comma-separated for ties
-      const winners = winnerStr.split(',').map(w => w.trim())
-      if (winners.includes(prop.player_picked)) {
-        current.propWins++
-        current.totalPoints += 2
-      }
-      // No penalty for wrong prop picks
-    }
-
-    scores.set(prop.picker, current)
   })
 
   return scores

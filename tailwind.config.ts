@@ -9,26 +9,35 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        // Softball season - deep field green palette
+        'field': {
+          'dark': '#0a0f0d',
+          'green': '#0d1f16',
+          'mid': '#0f2318',
+          'accent': '#22c55e',     // emerald green
+          'glow': '#16a34a',
+          'clay': '#b45309',       // clay/dirt tone for warmth
+        },
+        // Keep court- aliases so old refs still compile
         'court': {
-          'dark': '#0f0f1a',
-          'purple': '#1a1a2e',
-          'blue': '#16213e',
-          'accent': '#ff6b35',
-          'orange': '#ff8c42',
-          'glow': '#7c3aed',
+          'dark': '#0a0f0d',
+          'purple': '#0d1f16',
+          'blue': '#0f2318',
+          'accent': '#22c55e',
+          'orange': '#16a34a',
+          'glow': '#15803d',
         }
       },
       backgroundImage: {
         'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
-        'gradient-court': 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f0f1a 100%)',
-        'gradient-card': 'linear-gradient(135deg, rgba(124, 58, 237, 0.1) 0%, rgba(99, 102, 241, 0.05) 100%)',
-        'gradient-accent': 'linear-gradient(135deg, #ff6b35 0%, #ff8c42 100%)',
+        'gradient-field': 'linear-gradient(135deg, #0a0f0d 0%, #0d1f16 50%, #071a10 100%)',
+        'gradient-accent': 'linear-gradient(135deg, #16a34a 0%, #22c55e 100%)',
       },
       boxShadow: {
-        'glass': '0 8px 32px rgba(0, 0, 0, 0.3)',
-        'glass-sm': '0 4px 16px rgba(0, 0, 0, 0.2)',
-        'glow': '0 0 20px rgba(255, 107, 53, 0.3)',
-        'glow-purple': '0 0 30px rgba(124, 58, 237, 0.2)',
+        'glass': '0 8px 32px rgba(0, 0, 0, 0.4)',
+        'glass-sm': '0 4px 16px rgba(0, 0, 0, 0.3)',
+        'glow': '0 0 20px rgba(34, 197, 94, 0.25)',
+        'glow-green': '0 0 30px rgba(22, 163, 74, 0.2)',
       },
       backdropBlur: {
         'glass': '16px',

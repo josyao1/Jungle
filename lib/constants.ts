@@ -1,122 +1,125 @@
-// Bettors - people who log in, set lines, and make picks
-export const BETTORS = ['andy', 'andrew', 'josh', 'ronit', 'aarnav', 'pranav', 'vishi'] as const
+/**
+ * constants.ts — Game configuration for the Jungle Softball Sportsbook.
+ *
+ * Defines:
+ *  - PLAYERS / BETTORS: All 9 players (everyone bets on everyone)
+ *  - STATS: Softball stat categories tracked per game
+ *  - GAMES: 5-week season schedule (Sundays at 3pm CDT starting Apr 12, 2026)
+ *  - Helper functions for game phase and current game detection
+ *
+ * Player availability (injuries/absences) is managed dynamically in the
+ * `player_availability` Supabase table, not hardcoded here.
+ */
+
+// All players (also the bettors - everyone in the group)
+export const BETTORS = ['joshua', 'ronit', 'aarnav', 'evan', 'andrew', 'rohit', 'teja', 'aiyan', 'salil'] as const
 export type Bettor = typeof BETTORS[number]
 
-// All players whose stats can be tracked (bettors + non-betting teammates)
-export const PLAYERS = ['andy', 'andrew', 'josh', 'ronit', 'aarnav', 'pranav', 'tyler', 'vishi'] as const
+export const PLAYERS = ['joshua', 'ronit', 'aarnav', 'evan', 'andrew', 'rohit', 'teja', 'aiyan', 'salil'] as const
 export type Player = typeof PLAYERS[number]
 
-// Check if a player is on the game roster (their stats appear in tables)
-// Andrew: on roster for all games (but injured from week 3)
-// Tyler: on roster for weeks 3 and 4 only
-// Vishi: on roster for weeks 3, 4, and playoff 1
-export function isPlayerOnRoster(player: Player, gameNumber: number): boolean {
-  if (player === 'tyler') return gameNumber === 3 || gameNumber === 4
-  if (player === 'vishi') return gameNumber === 3 || gameNumber === 4 || gameNumber === 5
+// All players are on roster for all games (no IR system to start)
+export function isPlayerOnRoster(_player: Player, _gameNumber: number): boolean {
   return true
 }
 
-// Check if a player is injured (on IR) for a given game
-// Andrew went on IR starting week 3
-export function isPlayerInjured(player: Player, gameNumber?: number): boolean {
-  if (player === 'andrew') {
-    if (gameNumber !== undefined) return gameNumber >= 3
-    return true // default to injured if no game specified (for standings etc.)
-  }
+export function isPlayerInjured(_player: Player, _gameNumber?: number): boolean {
   return false
 }
 
-// Get players who are active (on roster and not injured) for a given game
-export function getActivePlayersForGame(gameNumber: number): readonly Player[] {
-  return PLAYERS.filter(p => isPlayerOnRoster(p, gameNumber) && !isPlayerInjured(p, gameNumber))
+export function getActivePlayersForGame(_gameNumber: number): readonly Player[] {
+  return PLAYERS
 }
 
-// Get players who should appear in stat tables for a given game (on roster, including injured)
-export function getRosterForGame(gameNumber: number): readonly Player[] {
-  return PLAYERS.filter(p => isPlayerOnRoster(p, gameNumber))
+export function getRosterForGame(_gameNumber: number): readonly Player[] {
+  return PLAYERS
 }
 
-// Legacy: Active players for current context (excludes all currently injured)
-export const ACTIVE_PLAYERS = PLAYERS.filter(p => !isPlayerInjured(p))
+export const ACTIVE_PLAYERS = PLAYERS
 
-export const STATS = ['pts', '3pm', 'ast', 'stl', 'blk'] as const
-export type Stat = typeof STATS[number]
+// Softball stats
+export const STATS = ['hits', 'rbis', 'totalbases', 'errors', 'strikeouts'] as const
 
-export const STAT_LABELS: Record<Stat, string> = {
-  pts: 'Points',
-  '3pm': '3-Pointers',
-  ast: 'Assists',
-  stl: 'Steals',
-  blk: 'Blocks',
-}
-
-// Prop bets - automatically set up for each game
-export const PROP_BETS = ['most_missed_ft', 'team_mvp'] as const
+// Prop bets — one per game, no exact line scoring, just pick the player
+export const PROP_BETS = ['biggest_disaster'] as const
 export type PropBet = typeof PROP_BETS[number]
 
 export const PROP_BET_LABELS: Record<PropBet, string> = {
-  most_missed_ft: 'Most Missed FTs',
-  team_mvp: 'Team MVP',
+  biggest_disaster: '🤦 Biggest Disaster Moment',
+}
+export type Stat = typeof STATS[number]
+
+export const STAT_LABELS: Record<Stat, string> = {
+  hits: 'Hits',
+  rbis: 'RBIs',
+  totalbases: 'Total Bases',
+  errors: 'Errors',
+  strikeouts: 'Ks',
 }
 
-// Game dates - all at 5pm CST (UTC-6 = 11pm UTC)
-// Everything locks at 5pm CST when the game starts
+// Game dates - Sundays at 3pm CDT (UTC-5 = 20:00 UTC) starting April 12
 export const GAMES = [
   {
     number: 1,
     label: 'Week 1',
-    date: new Date('2026-02-02T23:00:00Z'), // Feb 2 at 5pm CST
-    lockTime: new Date('2026-02-02T23:00:00Z'), // 5pm CST - lines & picks lock
+    date: new Date('2026-04-12T20:00:00Z'), // Apr 12 at 3pm CDT
+    lockTime: new Date('2026-04-12T20:00:00Z'),
   },
   {
     number: 2,
     label: 'Week 2',
-    date: new Date('2026-02-09T23:00:00Z'), // Feb 9
-    lockTime: new Date('2026-02-09T23:00:00Z'),
+    date: new Date('2026-04-19T20:00:00Z'), // Apr 19
+    lockTime: new Date('2026-04-19T20:00:00Z'),
   },
   {
     number: 3,
     label: 'Week 3',
-    date: new Date('2026-02-16T23:00:00Z'), // Feb 16
-    lockTime: new Date('2026-02-16T23:00:00Z'),
+    date: new Date('2026-04-26T20:00:00Z'), // Apr 26
+    lockTime: new Date('2026-04-26T20:00:00Z'),
   },
   {
     number: 4,
     label: 'Week 4',
-    date: new Date('2026-02-23T23:00:00Z'), // Feb 23
-    lockTime: new Date('2026-02-23T23:00:00Z'),
+    date: new Date('2026-05-03T20:00:00Z'), // May 3
+    lockTime: new Date('2026-05-03T20:00:00Z'),
   },
   {
     number: 5,
-    label: 'Playoff 1',
-    date: new Date('2026-03-02T23:00:00Z'), // Mar 2
-    lockTime: new Date('2026-03-02T23:00:00Z'),
+    label: 'Week 5',
+    date: new Date('2026-05-10T20:00:00Z'), // May 10
+    lockTime: new Date('2026-05-10T20:00:00Z'),
   },
 ]
 
+// Sort players so inactive ones always appear at the bottom
+export function sortWithInactiveAtBottom(players: readonly string[], inactive: Set<string>): string[] {
+  return [...players].sort((a, b) => {
+    const aOut = inactive.has(a) ? 1 : 0
+    const bOut = inactive.has(b) ? 1 : 0
+    return aOut - bOut
+  })
+}
+
 export function getCurrentGame() {
   const now = new Date()
-  // Find the current or next upcoming game
   for (const game of GAMES) {
-    // Game is still relevant until 8am the next morning (gives time to enter results)
+    // Game is still relevant until 8am the next morning CST
     const nextMorning = new Date(game.date)
-    nextMorning.setDate(nextMorning.getDate() + 1) // next day
-    nextMorning.setUTCHours(14, 0, 0, 0) // 8am CST = 14:00 UTC
+    nextMorning.setDate(nextMorning.getDate() + 1)
+    nextMorning.setUTCHours(13, 0, 0, 0) // 8am CDT = 13:00 UTC
 
     if (now < nextMorning) {
       return game
     }
   }
-  // All games completed, return last game
   return GAMES[GAMES.length - 1]
 }
 
 export function getGamePhase(game: typeof GAMES[number]) {
   const now = new Date()
-
   if (now < game.lockTime) {
-    return 'open' // Can submit lines and picks
+    return 'open'
   } else {
-    return 'locked' // Game in progress or completed
+    return 'locked'
   }
 }
