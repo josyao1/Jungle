@@ -295,7 +295,7 @@ export default function StatsPage() {
                   <div className="w-7 h-7 rounded-full shrink-0 overflow-hidden flex items-center justify-center"
                     style={{ background: hasPhoto ? undefined : `${color}18`, border: `1.5px solid ${color}40` }}>
                     {hasPhoto
-                      ? <img src={`/players/${player}.png`} alt={player} className="w-full h-full object-cover" />
+                      ? <img src={`/players/${player.toLowerCase()}.png`} alt={player} className="w-full h-full object-cover" />
                       : <span style={{ color, fontSize: '0.6rem', fontFamily: "'Bebas Neue', sans-serif", letterSpacing: '0.04em' }}>{player.charAt(0).toUpperCase()}</span>
                     }
                   </div>
@@ -404,7 +404,7 @@ export default function StatsPage() {
                   <div className="relative w-full" style={{ aspectRatio: '1 / 1', background: 'rgba(6,11,8,0.8)' }}>
                     {mvp && hasPhoto ? (
                       <img
-                        src={`/players/${mvp}.png`}
+                        src={`/players/${mvp.toLowerCase()}.png`}
                         alt={mvp}
                         className="absolute inset-0 w-full h-full object-cover object-top"
                       />

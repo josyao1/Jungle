@@ -434,7 +434,7 @@ export default function PickPage() {
                   <div className="w-7 h-7 rounded-full shrink-0 overflow-hidden flex items-center justify-center"
                     style={{ background: hasPhoto ? undefined : `${color}18`, border: `1.5px solid ${color}40` }}>
                     {hasPhoto
-                      ? <img src={`/players/${targetPlayer}.png`} alt={targetPlayer} className="w-full h-full object-cover" />
+                      ? <img src={`/players/${targetPlayer.toLowerCase()}.png`} alt={targetPlayer} className="w-full h-full object-cover" />
                       : <span style={{ color, fontSize: '0.65rem', fontFamily: "'Bebas Neue', sans-serif", letterSpacing: '0.04em' }}>{targetPlayer.charAt(0).toUpperCase()}</span>
                     }
                   </div>

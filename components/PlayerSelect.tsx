@@ -63,7 +63,7 @@ function PlayerPhotoSquare({ name, color, isSelected }: { name: string; color: s
 
   return (
     <img
-      src={`/players/${name}.png`}
+      src={`/players/${name.toLowerCase()}.png`}
       alt={name}
       className="absolute inset-0 w-full h-full object-cover object-top"
     />
@@ -102,7 +102,7 @@ function PlayerPhotoCircle({ name, color, isSelected }: { name: string; color: s
   return (
     <div className="w-10 h-10 rounded-full shrink-0 overflow-hidden" style={ringStyle}>
       <img
-        src={`/players/${name}.png`}
+        src={`/players/${name.toLowerCase()}.png`}
         alt={name}
         className="w-full h-full object-cover"
       />
@@ -137,7 +137,7 @@ function PlayerPhotoSmall({ name, color }: { name: string; color: string }) {
       className="w-7 h-7 rounded-full shrink-0 overflow-hidden"
       style={{ border: `1.5px solid ${color}55` }}
     >
-      <img src={`/players/${name}.png`} alt={name} className="w-full h-full object-cover" />
+      <img src={`/players/${name.toLowerCase()}.png`} alt={name} className="w-full h-full object-cover" />
     </div>
   )
 }

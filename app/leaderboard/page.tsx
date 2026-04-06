@@ -49,7 +49,7 @@ function PlayerAvatar({ name }: { name: string }) {
     return (
       <div className="w-9 h-9 rounded-full overflow-hidden shrink-0"
         style={{ border: `1.5px solid ${color}55` }}>
-        <img src={`/players/${name}.png`} alt={name} className="w-full h-full object-cover" />
+        <img src={`/players/${name.toLowerCase()}.png`} alt={name} className="w-full h-full object-cover" />
       </div>
     )
   }
