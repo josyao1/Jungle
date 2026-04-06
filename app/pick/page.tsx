@@ -375,7 +375,7 @@ export default function PickPage() {
                   <tr key={targetPlayer} className={isInactive ? 'player-inactive' : ''}>
                     <td className="capitalize font-medium">
                       <span>{targetPlayer}</span>
-                      {isInactive && <span className="badge badge-out ml-2">O</span>}
+                      {isInactive && <span className="badge badge-out ml-2">OUT</span>}
                     </td>
                     {STATS.map(stat => {
                       if (isInactive) {

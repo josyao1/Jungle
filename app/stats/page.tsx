@@ -206,7 +206,7 @@ export default function StatsPage() {
                 <tr key={player} className={isInactiveThisWeek ? 'player-inactive' : ''}>
                   <td className="capitalize font-medium">
                     <span>{player}</span>
-                    {isInactiveThisWeek && <span className="badge badge-out ml-2">O</span>}
+                    {isInactiveThisWeek && <span className="badge badge-out ml-2">OUT</span>}
                   </td>
                   {STATS.map(stat => (
                     <td key={stat} className="text-center">
