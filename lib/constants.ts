@@ -11,6 +11,20 @@
  * `player_availability` Supabase table, not hardcoded here.
  */
 
+// Player avatar hue — used for left-border accents and initial avatars.
+// Add an entry here when a new player joins.
+export const PLAYER_HUES: Record<string, string> = {
+  joshua: '#22c55e', ronit: '#f59e0b', aarnav: '#06b6d4', evan: '#a855f7',
+  andrew: '#f97316', rohit: '#ec4899', teja: '#10b981', aiyan: '#3b82f6',
+  salil: '#eab308', Jay: '#8b5cf6', Tommy: '#84cc16', Neo: '#d946ef',
+}
+
+// Players with a photo at /public/players/{name.toLowerCase()}.png
+// Add to this set when a new player provides a photo.
+export const PLAYERS_WITH_PHOTOS = new Set<string>([
+  'joshua', 'ronit', 'aarnav', 'evan', 'andrew', 'rohit', 'teja', 'aiyan', 'salil', 'Jay', 'Tommy', 'Neo',
+])
+
 // All players (also the bettors - everyone in the group)
 export const BETTORS = ['joshua', 'ronit', 'aarnav', 'evan', 'andrew', 'rohit', 'teja', 'aiyan', 'salil', 'Jay', 'Tommy', 'Neo'] as const
 export type Bettor = typeof BETTORS[number]

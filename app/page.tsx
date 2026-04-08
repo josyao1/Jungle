@@ -46,22 +46,39 @@ export default function Home() {
           <GameStatus />
 
           {/* Quick nav */}
-          <div className="grid grid-cols-3 gap-3">
-            <a href="/pick"
-              className="glass-card glass-card-hover rounded-2xl p-5 flex flex-col items-center justify-center gap-2 text-center">
-              <span className="text-2xl">🎯</span>
-              <span className="text-sm font-semibold text-slate-300">Pick Overs</span>
-            </a>
-            <a href="/stats"
-              className="glass-card glass-card-hover rounded-2xl p-5 flex flex-col items-center justify-center gap-2 text-center">
-              <span className="text-2xl">📊</span>
-              <span className="text-sm font-semibold text-slate-300">Stats</span>
-            </a>
-            <a href="/leaderboard"
-              className="glass-card glass-card-hover rounded-2xl p-5 flex flex-col items-center justify-center gap-2 text-center">
-              <span className="text-2xl">🏆</span>
-              <span className="text-sm font-semibold text-slate-300">Board</span>
-            </a>
+          <div className="grid grid-cols-3 gap-2">
+            {([
+              { href: '/pick',        label: 'PICKS',  sub: 'Bet the over',  color: '#22c55e' },
+              { href: '/stats',       label: 'STATS',  sub: 'Season data',   color: '#f59e0b' },
+              { href: '/leaderboard', label: 'BOARD',  sub: 'Rankings',      color: '#a855f7' },
+            ] as const).map(({ href, label, sub, color }) => (
+              <a key={href} href={href}
+                className="group rounded-xl px-3 py-4 flex flex-col justify-between transition-all"
+                style={{
+                  background: 'rgba(6,11,8,0.6)',
+                  border: `1px solid ${color}18`,
+                  borderLeft: `3px solid ${color}`,
+                  minHeight: '80px',
+                }}>
+                <span style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: '0.8rem',
+                  fontWeight: 800,
+                  letterSpacing: '0.12em',
+                  color,
+                  lineHeight: 1,
+                }}>
+                  {label}
+                </span>
+                <div className="flex items-end justify-between mt-2">
+                  <span className="text-slate-600 text-xs" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+                    {sub}
+                  </span>
+                  <span className="text-xs transition-transform group-hover:translate-x-0.5"
+                    style={{ color, opacity: 0.6 }}>→</span>
+                </div>
+              </a>
+            ))}
           </div>
         </>
       )}

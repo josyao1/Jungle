@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic'
  */
 
 import { useState, useEffect, useCallback } from 'react'
-import { BETTORS, GAMES } from '@/lib/constants'
+import { BETTORS, GAMES, PLAYER_HUES, PLAYERS_WITH_PHOTOS } from '@/lib/constants'
 import { supabase } from '@/lib/supabase'
 
 interface GameScore {
@@ -25,15 +25,16 @@ interface PlayerScores {
   games: GameScore[]
 }
 
-const PLAYER_HUES: Record<string, string> = {
-  joshua:'#22c55e', ronit:'#f59e0b', aarnav:'#06b6d4', evan:'#a855f7',
-  andrew:'#f97316', rohit:'#ec4899', teja:'#10b981', aiyan:'#3b82f6',
-  salil:'#eab308', Jay:'#8b5cf6', Tommy:'#84cc16', Neo:'#d946ef',
+interface StatInsight {
+  stat: string
+  rate: number // 0–1
 }
 
-const PLAYERS_WITH_PHOTOS = new Set([
-  'joshua','ronit','aarnav','evan','andrew','rohit','teja','aiyan','salil','Jay','Tommy','Neo',
-])
+const STAT_SHORT: Record<string, string> = {
+  hits: 'H', rbis: 'RBI', totalbases: 'TB', errors: 'E', strikeouts: 'K',
+}
+
+
 
 const RANK_STYLES = [
   { label: '1', bg: 'rgba(245,158,11,0.15)', border: 'rgba(245,158,11,0.4)', text: '#f59e0b' },
@@ -71,6 +72,7 @@ function PlayerAvatar({ name }: { name: string }) {
 
 export default function LeaderboardPage() {
   const [scores, setScores] = useState<PlayerScores[]>([])
+  const [statInsights, setStatInsights] = useState<Map<string, StatInsight[]>>(new Map())
   const [loading, setLoading] = useState(true)
   const [expandedPlayer, setExpandedPlayer] = useState<string | null>(null)
 
@@ -79,15 +81,22 @@ export default function LeaderboardPage() {
       .from('jungle_games').select('id, game_number').order('game_number')
     if (!games) { setLoading(false); return }
 
-    const gameMap = new Map(games.map(g => [g.id, g.game_number]))
-    const { data: allScores } = await supabase.from('jungle_scores').select('*')
+    const gameMap = new Map(games.map((g: any) => [g.id, g.game_number]))
 
+    const [scoresRes, picksRes, linesRes, resultsRes] = await Promise.all([
+      supabase.from('jungle_scores').select('*'),
+      supabase.from('jungle_picks').select('game_id, picker, player, stat, picked'),
+      supabase.from('jungle_lines').select('game_id, player, stat, value'),
+      supabase.from('jungle_results').select('game_id, player, stat, value'),
+    ])
+
+    // Aggregate scores
     const playerScores = new Map<string, PlayerScores>()
     BETTORS.forEach(p => playerScores.set(p, {
       player: p, totalPoints: 0, totalCorrectPicks: 0, totalMissedPicks: 0, games: [],
     }))
 
-    allScores?.forEach(score => {
+    scoresRes.data?.forEach((score: any) => {
       const playerData = playerScores.get(score.player)
       if (!playerData) return
       const gameNum = gameMap.get(score.game_id)
@@ -103,6 +112,40 @@ export default function LeaderboardPage() {
       })
     })
 
+    // Per-bettor per-stat hit rates (only for picks with known results)
+    const lineMap = new Map<string, number>()
+    linesRes.data?.forEach((l: any) => lineMap.set(`${l.game_id}|${l.player}|${l.stat}`, l.value))
+
+    const resultMap = new Map<string, number>()
+    resultsRes.data?.forEach((r: any) => resultMap.set(`${r.game_id}|${r.player}|${r.stat}`, r.value))
+
+    const rawRates = new Map<string, Map<string, { hits: number; total: number }>>()
+    picksRes.data?.forEach((p: any) => {
+      if (!p.picked) return
+      const lineVal = lineMap.get(`${p.game_id}|${p.player}|${p.stat}`)
+      const resultVal = resultMap.get(`${p.game_id}|${p.player}|${p.stat}`)
+      if (lineVal === undefined || resultVal === undefined) return
+      if (!rawRates.has(p.picker)) rawRates.set(p.picker, new Map())
+      const pickerMap = rawRates.get(p.picker)!
+      const cur = pickerMap.get(p.stat) || { hits: 0, total: 0 }
+      cur.total++
+      if (resultVal >= lineVal) cur.hits++
+      pickerMap.set(p.stat, cur)
+    })
+
+    // Build insights: only stats with 3+ picks and rate >75% or <25%
+    const insights = new Map<string, StatInsight[]>()
+    rawRates.forEach((statMap, picker) => {
+      const notable: StatInsight[] = []
+      statMap.forEach(({ hits, total }, stat) => {
+        if (total < 3) return
+        const rate = hits / total
+        if (rate > 0.75 || rate < 0.25) notable.push({ stat, rate })
+      })
+      if (notable.length > 0) insights.set(picker, notable)
+    })
+
+    setStatInsights(insights)
     setScores(Array.from(playerScores.values()).sort((a, b) => b.totalPoints - a.totalPoints))
     setLoading(false)
   }, [])
@@ -120,6 +163,7 @@ export default function LeaderboardPage() {
           const rank = RANK_STYLES[i]
           const color = PLAYER_HUES[entry.player] || '#22c55e'
           const isExpanded = expandedPlayer === entry.player
+          const insights = statInsights.get(entry.player) || []
 
           return (
             <div key={entry.player}>
@@ -139,10 +183,34 @@ export default function LeaderboardPage() {
                 {/* Avatar */}
                 <PlayerAvatar name={entry.player} />
 
-                {/* Name */}
-                <span className="flex-1 font-semibold capitalize text-sm text-slate-200">
-                  {entry.player}
-                </span>
+                {/* Name + stat insights */}
+                <div className="flex-1 min-w-0 flex flex-col gap-1">
+                  <span className="font-semibold capitalize text-sm text-slate-200 truncate">
+                    {entry.player}
+                  </span>
+                  {insights.length > 0 && (
+                    <div className="flex gap-1 flex-wrap">
+                      {insights.map(({ stat, rate }) => {
+                        const hot = rate > 0.75
+                        return (
+                          <span key={stat}
+                            className="text-xs font-bold px-1.5 py-0.5 rounded"
+                            style={{
+                              fontFamily: "'JetBrains Mono', monospace",
+                              fontSize: '0.65rem',
+                              letterSpacing: '0.05em',
+                              background: hot ? 'rgba(34,197,94,0.13)' : 'rgba(239,68,68,0.11)',
+                              color: hot ? '#22c55e' : '#f87171',
+                              border: `1px solid ${hot ? 'rgba(34,197,94,0.25)' : 'rgba(239,68,68,0.22)'}`,
+                            }}
+                          >
+                            {STAT_SHORT[stat] ?? stat} {Math.round(rate * 100)}%
+                          </span>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
 
                 {/* Hit / Miss chips */}
                 <div className="flex items-center gap-1.5 shrink-0">

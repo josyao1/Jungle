@@ -107,10 +107,15 @@ export interface Score {
 // Use .has(player) to check inactive, .get(player) ?? 'OUT' for display label.
 // Empty map = everyone active (default when no availability rows exist).
 export async function getInactivePlayersForGame(gameId: string): Promise<Map<string, string>> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('jungle_player_availability')
     .select('player, active, reason')
     .eq('game_id', gameId)
+
+  if (error) {
+    console.error('[getInactivePlayersForGame] query failed:', error.message)
+    return new Map()
+  }
 
   if (!data || data.length === 0) return new Map()
 

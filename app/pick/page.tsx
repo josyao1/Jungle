@@ -9,17 +9,11 @@ export const dynamic = 'force-dynamic'
  */
 
 import { useState, useEffect, useCallback } from 'react'
-import { PLAYERS, STATS, STAT_LABELS, GAMES, PROP_BETS, PROP_BET_LABELS, getGamePhase, sortWithInactiveAtBottom, Player, Stat } from '@/lib/constants'
+import { PLAYERS, STATS, STAT_LABELS, GAMES, PROP_BETS, PROP_BET_LABELS, getGamePhase, sortWithInactiveAtBottom, Player, Stat, PLAYER_HUES, PLAYERS_WITH_PHOTOS } from '@/lib/constants'
 import PlayerSelect from '@/components/PlayerSelect'
 import { supabase, Line, Pick, getInactivePlayersForGame } from '@/lib/supabase'
 import { calculateAveragedLine } from '@/lib/utils'
 
-const PLAYER_HUES: Record<string, string> = {
-  joshua:'#22c55e', ronit:'#f59e0b', aarnav:'#06b6d4', evan:'#a855f7',
-  andrew:'#f97316', rohit:'#ec4899', teja:'#10b981', aiyan:'#3b82f6',
-  salil:'#eab308', Jay:'#8b5cf6', Tommy:'#84cc16', Neo:'#d946ef',
-}
-const PLAYERS_WITH_PHOTOS = new Set(['joshua','ronit','aarnav','evan','andrew','rohit','teja','aiyan','salil','Jay','Tommy','Neo'])
 const STAT_SHORT: Record<string, string> = {
   hits: 'H', rbis: 'RBI', totalbases: 'Total Bases', errors: 'Errors', strikeouts: 'K',
 }
@@ -176,16 +170,18 @@ export default function PickPage() {
   }
 
   const calculateAndSaveLines = async (gId: string, active: string[]) => {
-    const { data: predictions } = await supabase
+    const { data: predictions, error: predError } = await supabase
       .from('jungle_line_predictions')
       .select('*')
       .eq('game_id', gId)
 
-    await supabase.from('jungle_lines').delete().eq('game_id', gId)
+    if (predError) {
+      console.error('[calculateAndSaveLines] fetch failed:', predError.message)
+      return
+    }
     if (!predictions || predictions.length === 0) return
 
     const linesToInsert: Array<{ game_id: string; player: string; stat: string; value: number }> = []
-
     active.forEach(p => {
       STATS.forEach(s => {
         const values = predictions
@@ -196,15 +192,19 @@ export default function PickPage() {
         }
       })
     })
+    if (linesToInsert.length === 0) return
 
-    if (linesToInsert.length > 0) {
-      await supabase.from('jungle_lines').insert(linesToInsert)
+    const { error: deleteError } = await supabase.from('jungle_lines').delete().eq('game_id', gId)
+    if (deleteError) {
+      console.error('[calculateAndSaveLines] delete failed:', deleteError.message)
+      return
     }
+    await supabase.from('jungle_lines').insert(linesToInsert)
   }
 
   useEffect(() => { loadData() }, [loadData])
 
-  const autoSave = async (newPicks: Record<string, Record<string, boolean>>) => {
+  const autoSave = useCallback(async (newPicks: Record<string, Record<string, boolean>>) => {
     if (!player || !gameId) return
     setSaveStatus('saving')
     const picksToInsert = PLAYERS.filter(p => !inactivePlayers.has(p)).flatMap(p =>
@@ -217,10 +217,15 @@ export default function PickPage() {
         locked: phase === 'locked',
       }))
     )
-    await supabase.from('jungle_picks').upsert(picksToInsert, { onConflict: 'game_id,picker,player,stat' })
+    const { error } = await supabase.from('jungle_picks').upsert(picksToInsert, { onConflict: 'game_id,picker,player,stat' })
+    if (error) {
+      console.error('[autoSave] upsert failed:', error.message)
+      setSaveStatus('idle')
+      return
+    }
     setSaveStatus('saved')
     setTimeout(() => setSaveStatus('idle'), 1500)
-  }
+  }, [player, gameId, inactivePlayers, phase])
 
   const togglePick = (targetPlayer: string, stat: string) => {
     setPicks(prev => {
@@ -241,6 +246,7 @@ export default function PickPage() {
       autoPickedCells.forEach(({ player: p, stat: s }) => {
         updated[p] = { ...updated[p], [s]: false }
       })
+      autoSave(updated)
       return updated
     })
     localStorage.setItem(`jungle_autopick_off_week_${selectedWeek}`, 'true')
@@ -256,18 +262,23 @@ export default function PickPage() {
     loadData(selectedWeek)
   }
 
-  const autoSavePropPick = async (propType: string, pickedPlayer: string) => {
+  const autoSavePropPick = useCallback(async (propType: string, pickedPlayer: string) => {
     if (!player || !gameId) return
     setSaveStatus('saving')
-    await supabase.from('jungle_prop_picks').upsert({
+    const { error } = await supabase.from('jungle_prop_picks').upsert({
       game_id: gameId,
       picker: player,
       prop_type: propType,
       player_picked: pickedPlayer,
     }, { onConflict: 'game_id,picker,prop_type' })
+    if (error) {
+      console.error('[autoSavePropPick] upsert failed:', error.message)
+      setSaveStatus('idle')
+      return
+    }
     setSaveStatus('saved')
     setTimeout(() => setSaveStatus('idle'), 1500)
-  }
+  }, [player, gameId])
 
   const getLine = (targetPlayer: string, stat: string): number | null => {
     const line = lines.find(l => l.player === targetPlayer && l.stat === stat)
@@ -382,9 +393,67 @@ export default function PickPage() {
         </div>
       )}
 
+      {/* Prop Bets */}
+      <div className="glass-card rounded-2xl p-4 md:p-5">
+        <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-3">Prop Bets</h2>
+        <div className="space-y-3">
+          {PROP_BETS.map(prop => {
+            const picked = propPicks[prop]
+            const result = picked ? getPropPickResult(prop, picked) : null
+            return (
+              <div key={prop} className="flex items-center gap-3">
+                <span className="text-xs text-slate-400 flex-1 min-w-0">{PROP_BET_LABELS[prop]}</span>
+                <div className="relative shrink-0">
+                  <select
+                    disabled={isLocked}
+                    value={picked || ''}
+                    onChange={e => {
+                      const val = e.target.value
+                      if (!val) return
+                      setPropPicks(prev => ({ ...prev, [prop]: val }))
+                      autoSavePropPick(prop, val)
+                    }}
+                    style={{
+                      appearance: 'none',
+                      background: result === 'correct' ? 'rgba(34,197,94,0.15)'
+                        : result === 'incorrect' ? 'rgba(239,68,68,0.12)'
+                        : picked ? 'rgba(34,197,94,0.1)' : 'rgba(6,11,8,0.7)',
+                      border: result === 'correct' ? '1px solid rgba(34,197,94,0.5)'
+                        : result === 'incorrect' ? '1px solid rgba(239,68,68,0.4)'
+                        : picked ? '1px solid rgba(34,197,94,0.35)' : '1px solid rgba(255,255,255,0.08)',
+                      color: result === 'correct' ? '#22c55e'
+                        : result === 'incorrect' ? '#f87171'
+                        : picked ? '#e2e8f0' : '#64748b',
+                      borderRadius: '8px',
+                      padding: '6px 28px 6px 10px',
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: '0.72rem',
+                      fontWeight: 600,
+                      cursor: isLocked ? 'default' : 'pointer',
+                      width: '120px',
+                    }}
+                    className="disabled:opacity-50"
+                  >
+                    <option value="" disabled style={{ background: '#0d1f16', color: '#64748b' }}>Pick one</option>
+                    {PLAYERS.filter(p => !inactivePlayers.has(p)).map(p => (
+                      <option key={p} value={p} style={{ background: '#0d1f16', color: '#e2e8f0' }} className="capitalize">
+                        {p.charAt(0).toUpperCase() + p.slice(1)}
+                      </option>
+                    ))}
+                  </select>
+                  <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-slate-500" style={{ fontSize: '0.6rem' }}>▾</span>
+                </div>
+                {result === 'correct' && <span className="text-xs text-emerald-400 shrink-0">✓ +1</span>}
+                {result === 'incorrect' && <span className="text-xs text-red-400 shrink-0">✗</span>}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
       <div className="glass-card rounded-2xl p-3 md:p-5">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide">Line Picks</h2>
+          <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide">Line Picks <span className="normal-case font-normal text-slate-600">(click to select over)</span></h2>
           <span className="text-xs transition-all"
             style={{
               color: saveStatus === 'saving' ? '#64748b' : '#22c55e',
@@ -513,39 +582,26 @@ export default function PickPage() {
             </span>
           )}
         </div>
-      </div>
 
-      {/* Prop Bets */}
-      <div className="glass-card rounded-2xl p-4 md:p-6">
-        <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-4">Prop Bets</h2>
-        <div className="space-y-6">
-          {PROP_BETS.map(prop => (
-            <div key={prop}>
-              <h3 className="text-sm text-slate-300 mb-3 font-medium">{PROP_BET_LABELS[prop]}</h3>
-              <div className="grid grid-cols-3 gap-2">
-                {PLAYERS.filter(p => !inactivePlayers.has(p)).map(p => {
-                  const propResult = getPropPickResult(prop, p)
-                  const isSelected = propPicks[prop] === p
-                  return (
-                    <button
-                      key={p}
-                      onClick={() => { if (!isLocked) { setPropPicks(prev => ({ ...prev, [prop]: p })); autoSavePropPick(prop, p) } }}
-                      disabled={isLocked}
-                      className={`px-2 py-3 rounded-lg text-xs capitalize font-medium transition-all pick-btn ${
-                        propResult === 'correct' ? 'pick-correct'
-                        : propResult === 'incorrect' ? 'pick-incorrect'
-                        : isSelected ? 'selected' : ''
-                      } disabled:opacity-50`}
-                    >
-                      {p}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
+        {/* Stat abbreviation key */}
+        <div className="mt-3 pt-3 flex flex-wrap gap-x-3 gap-y-1"
+          style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
+          {[
+            { abbr: 'H', def: 'Hits — times reached base via a hit (single, double, triple, HR)' },
+            { abbr: 'RBI', def: 'Runs Batted In' },
+            { abbr: 'TB', def: 'Total Bases — 1 per single, 2 double, 3 triple, 4 HR' },
+            { abbr: 'E', def: 'Errors — fielding mistakes that let a batter reach or advance' },
+            { abbr: 'K', def: 'Strikeouts (throwing)' },
+          ].map(({ abbr, def }) => (
+            <span key={abbr} className="text-xs" style={{ color: 'var(--text-faint)', fontFamily: "'JetBrains Mono', monospace" }}>
+              <span style={{ color: '#f59e0b', fontWeight: 700 }}>{abbr}</span>
+              <span style={{ color: '#334155' }}> = </span>
+              {def}
+            </span>
           ))}
         </div>
       </div>
+
     </div>
   )
 }

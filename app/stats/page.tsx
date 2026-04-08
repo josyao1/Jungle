@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic'
  */
 
 import { useState, useEffect, useCallback } from 'react'
-import { PLAYERS, STATS, STAT_LABELS, GAMES, sortWithInactiveAtBottom, Stat } from '@/lib/constants'
+import { PLAYERS, STATS, STAT_LABELS, GAMES, sortWithInactiveAtBottom, Stat, PLAYER_HUES, PLAYERS_WITH_PHOTOS } from '@/lib/constants'
 import { supabase } from '@/lib/supabase'
 
 interface PlayerStats {
@@ -28,12 +28,22 @@ interface WeeklyHighlight {
 type SortColumn = 'player' | Stat | 'ba'
 type SortDirection = 'asc' | 'desc'
 
-const PLAYER_HUES: Record<string, string> = {
-  joshua:'#22c55e', ronit:'#f59e0b', aarnav:'#06b6d4', evan:'#a855f7',
-  andrew:'#f97316', rohit:'#ec4899', teja:'#10b981', aiyan:'#3b82f6',
-  salil:'#eab308', Jay:'#8b5cf6', Tommy:'#84cc16', Neo:'#d946ef',
+
+// Athlete-style display names for the stats page only
+const ATHLETE_NAMES: Record<string, string> = {
+  joshua: 'J. Yao',
+  evan:   'E. Smith',
+  aarnav: 'A. Patel',
+  salil:  'S. Chandramohan',
+  aiyan:  'A. Sanjanwala',
+  Jay:    'J. Diffley',
+  andrew: 'A. Hong',
+  ronit:  'R. Mehta',
+  rohit:  'R. Katakam',
+  teja:   'A. Siluveru',
+  Neo:    'N. Trovela-Villamiel',
+  Tommy:  'T. Matthys',
 }
-const PLAYERS_WITH_PHOTOS = new Set(['joshua','ronit','aarnav','evan','andrew','rohit','teja','aiyan','salil','Jay','Tommy','Neo'])
 
 function formatBA(hits: number, ab: number): string {
   if (ab === 0) return '.---'
@@ -300,7 +310,7 @@ export default function StatsPage() {
                     }
                   </div>
                   <div className="min-w-0">
-                    <span className="capitalize text-sm font-semibold text-slate-200 truncate block">{player}</span>
+                    <span className="text-sm font-semibold text-slate-200 truncate block">{ATHLETE_NAMES[player] ?? player}</span>
                     {isInactiveThisWeek && (
                       <span className="badge badge-out">{weeklyInactive.get(selectedWeek as number)?.get(player) || 'OUT'}</span>
                     )}
@@ -440,7 +450,7 @@ export default function StatsPage() {
                     {mvp ? (
                       <>
                         <div className="font-bold capitalize text-sm" style={{ color: mvpColor, fontFamily: "'Bebas Neue', sans-serif", letterSpacing: '0.05em', fontSize: '0.95rem' }}>
-                          ★ {mvp}
+                          ★ {ATHLETE_NAMES[mvp] ?? mvp}
                         </div>
                         {h?.mvp_blurb && (
                           <p className="text-slate-500 text-xs mt-1 leading-snug line-clamp-2">{h.mvp_blurb}</p>

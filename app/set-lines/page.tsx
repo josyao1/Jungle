@@ -175,6 +175,9 @@ export default function SetLinesPage() {
           <p className="text-slate-500 text-sm mt-1">
             This is <span className="text-slate-300 font-medium">not</span> your picks — you're predicting stats so everyone's submissions average into the official line.
           </p>
+          <p className="text-slate-600 text-xs mt-1.5">
+            Lines are rounded down to the nearest 0.5 — e.g. a line of 1 becomes <span className="text-amber-500/80 font-mono">0.5</span>, so betting the over means hitting 1+.
+          </p>
         </div>
         <PlayerSelect onSelect={setPlayer} selected={player} compact />
       </div>

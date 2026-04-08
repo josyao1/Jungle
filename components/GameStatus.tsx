@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { GAMES, getGamePhase } from '@/lib/constants'
-import { formatTimeRemaining } from '@/lib/utils'
+import { formatTimeRemaining, msUntilLock } from '@/lib/utils'
 
 interface GameStatusProps {
   gameNumber?: number
@@ -29,6 +29,7 @@ export default function GameStatus({ gameNumber }: GameStatusProps) {
 
   const phase = getGamePhase(game)
   const isOpen = phase === 'open'
+  const isCountdown = isOpen && msUntilLock(game.lockTime) < 24 * 60 * 60 * 1000
 
   const gameDate = game.date.toLocaleDateString('en-US', {
     weekday: 'long',
@@ -90,33 +91,53 @@ export default function GameStatus({ gameNumber }: GameStatusProps) {
           >
             {game.label} · {gameDate}
           </div>
-          <div className="flex items-baseline gap-2 flex-wrap">
-            <span
-              className="text-2xl font-black leading-none"
-              style={{ fontFamily: "'Bebas Neue', 'Impact', sans-serif", letterSpacing: '0.04em' }}
-            >
-              3:00 PM
-            </span>
-            <span style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>Sunday · CDT</span>
-          </div>
 
-          {isOpen ? (
-            <div className="mt-1.5 flex items-center gap-1.5">
-              <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Locks in</span>
-              <span
-                className="font-bold text-sm"
-                style={{ fontFamily: "'JetBrains Mono', monospace", color: '#f59e0b' }}
+          {isCountdown ? (
+            /* Countdown mode — big HH:MM:SS ticker */
+            <>
+              <div
+                className="font-black leading-none tabular-nums"
+                style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: '1.6rem',
+                  color: '#f59e0b',
+                  letterSpacing: '0.04em',
+                  textShadow: '0 0 20px rgba(245,158,11,0.35)',
+                }}
               >
                 {timeRemaining}
-              </span>
-            </div>
+              </div>
+              <div className="mt-1 text-xs uppercase tracking-widest font-semibold"
+                style={{ color: 'rgba(245,158,11,0.5)', fontFamily: "'JetBrains Mono', monospace" }}>
+                Until lock
+              </div>
+            </>
           ) : (
-            <div
-              className="mt-1.5 text-xs uppercase tracking-widest font-semibold"
-              style={{ color: '#f87171', fontFamily: "'JetBrains Mono', monospace" }}
-            >
-              Picks locked · Results pending
-            </div>
+            <>
+              <div className="flex items-baseline gap-2 flex-wrap">
+                <span
+                  className="text-2xl font-black leading-none"
+                  style={{ fontFamily: "'Bebas Neue', 'Impact', sans-serif", letterSpacing: '0.04em' }}
+                >
+                  3:00 PM
+                </span>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>Sunday · CDT</span>
+              </div>
+              {isOpen ? (
+                <div className="mt-1.5 flex items-center gap-1.5">
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Locks in</span>
+                  <span className="font-bold text-sm"
+                    style={{ fontFamily: "'JetBrains Mono', monospace", color: '#f59e0b' }}>
+                    {timeRemaining}
+                  </span>
+                </div>
+              ) : (
+                <div className="mt-1.5 text-xs uppercase tracking-widest font-semibold"
+                  style={{ color: '#f87171', fontFamily: "'JetBrains Mono', monospace" }}>
+                  Picks locked · Results pending
+                </div>
+              )}
+            </>
           )}
         </div>
 

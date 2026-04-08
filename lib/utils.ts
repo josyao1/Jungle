@@ -48,15 +48,23 @@ export function formatTimeRemaining(targetDate: Date): string {
 
   if (diff <= 0) return 'Locked'
 
-  const hours = Math.floor(diff / (1000 * 60 * 60))
-  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
+  const totalSeconds = Math.floor(diff / 1000)
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
 
-  if (hours > 24) {
+  if (hours >= 24) {
     const days = Math.floor(hours / 24)
     return `${days}d ${hours % 24}h`
   }
 
-  return `${hours}h ${minutes}m`
+  // Under 24h — show HH:MM:SS
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+}
+
+// Returns ms until lock, or 0 if already locked
+export function msUntilLock(targetDate: Date): number {
+  return Math.max(0, targetDate.getTime() - Date.now())
 }
 
 // Simplified scoring: right pick = +1, missed pick = -0.5, no bonuses

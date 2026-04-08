@@ -8,33 +8,12 @@
  */
 
 import { useState, useEffect, useRef } from 'react'
-import { BETTORS, Bettor, Player } from '@/lib/constants'
+import { BETTORS, Bettor, Player, PLAYER_HUES, PLAYERS_WITH_PHOTOS } from '@/lib/constants'
 
 interface PlayerSelectProps {
   onSelect: (player: Player) => void
   selected?: Player | null
   compact?: boolean
-}
-
-// Players who have a photo in /public/players/{name}.png
-const PLAYERS_WITH_PHOTOS = new Set([
-  'joshua', 'ronit', 'aarnav', 'evan', 'andrew', 'rohit', 'teja', 'aiyan', 'salil', 'Jay', 'Tommy', 'Neo',
-])
-
-// Each player gets a fixed hue for avatar ring consistency
-const PLAYER_HUES: Record<string, string> = {
-  joshua:  '#22c55e',
-  ronit:   '#f59e0b',
-  aarnav:  '#06b6d4',
-  evan:    '#a855f7',
-  andrew:  '#f97316',
-  rohit:   '#ec4899',
-  teja:    '#10b981',
-  aiyan:   '#3b82f6',
-  salil:   '#eab308',
-  Jay:     '#8b5cf6',
-  Tommy:   '#84cc16',
-  Neo:     '#d946ef',
 }
 
 // Full-bleed square photo for the roster grid

@@ -59,7 +59,7 @@ export default function AdminPage() {
 
     const [{ data: gamesData }, { data: availData }, { data: highlightData }] = await Promise.all([
       supabase.from('jungle_games').select('id, game_number, forfeited').order('game_number'),
-      supabase.from('jungle_player_availability').select('game_id, player, active'),
+      supabase.from('jungle_player_availability').select('game_id, player, active, reason'),
       supabase.from('jungle_weekly_highlights').select('game_id, mvp_player, mvp_blurb'),
     ])
 
@@ -220,7 +220,13 @@ export default function AdminPage() {
 
   const handleSubmitResults = async (gameId: string) => {
     setSavingResults(true)
-    await supabase.from('jungle_results').delete().eq('game_id', gameId)
+
+    const { error: deleteError } = await supabase.from('jungle_results').delete().eq('game_id', gameId)
+    if (deleteError) {
+      alert('Failed to clear old results. No changes made.')
+      setSavingResults(false)
+      return
+    }
 
     const toInsert: Array<{ game_id: string; player: string; stat: string; value: number }> = []
     PLAYERS.forEach(p => {
@@ -232,13 +238,21 @@ export default function AdminPage() {
         }
       })
     })
-    if (toInsert.length > 0) await supabase.from('jungle_results').insert(toInsert)
+    if (toInsert.length > 0) {
+      const { error: insertError } = await supabase.from('jungle_results').insert(toInsert)
+      if (insertError) {
+        alert('Failed to save results: ' + insertError.message)
+        setSavingResults(false)
+        return
+      }
+    }
 
     const propToInsert = Object.entries(propResults)
       .filter(([, winners]) => winners && winners.length > 0)
       .map(([propType, winners]) => ({ game_id: gameId, prop_type: propType, winner: winners.join(',') }))
     if (propToInsert.length > 0) {
-      await supabase.from('jungle_prop_results').upsert(propToInsert, { onConflict: 'game_id,prop_type' })
+      const { error: propError } = await supabase.from('jungle_prop_results').upsert(propToInsert, { onConflict: 'game_id,prop_type' })
+      if (propError) console.error('[handleSubmitResults] prop upsert failed:', propError.message)
     }
 
     setSavingResults(false)
@@ -259,19 +273,37 @@ export default function AdminPage() {
       return
     }
 
-    const [{ data: lines }, { data: picks }, { data: resultsData }] = await Promise.all([
+    const [linesRes, picksRes, resultsRes, propPicksRes, propResultsRes] = await Promise.all([
       supabase.from('jungle_lines').select('*').eq('game_id', gameId),
       supabase.from('jungle_picks').select('*').eq('game_id', gameId),
       supabase.from('jungle_results').select('*').eq('game_id', gameId),
+      supabase.from('jungle_prop_picks').select('*').eq('game_id', gameId),
+      supabase.from('jungle_prop_results').select('*').eq('game_id', gameId),
     ])
 
-    if (!lines || !picks || !resultsData) {
+    if (!linesRes.data || !picksRes.data || !resultsRes.data) {
       alert('Missing data to calculate scores')
       setSavingResults(false)
       return
     }
 
-    const scores = calculateScores(picks as Pick[], lines as Line[], resultsData as Result[])
+    // Stat pick scores: +1 correct, -0.5 missed
+    const scores = calculateScores(picksRes.data as Pick[], linesRes.data as Line[], resultsRes.data as Result[])
+
+    // Prop pick scores: +1 correct, no penalty for wrong
+    const propResultMap = new Map<string, Set<string>>()
+    propResultsRes.data?.forEach((pr: any) => {
+      propResultMap.set(pr.prop_type, new Set(pr.winner.split(',').map((w: string) => w.trim())))
+    })
+    propPicksRes.data?.forEach((pp: any) => {
+      const winners = propResultMap.get(pp.prop_type)
+      if (!winners?.has(pp.player_picked)) return
+      const current = scores.get(pp.picker) || { correctPicks: 0, missedPicks: 0, totalPoints: 0 }
+      current.correctPicks++
+      current.totalPoints += 1
+      scores.set(pp.picker, current)
+    })
+
     const scoresToInsert = Array.from(scores.entries()).map(([playerName, score]) => ({
       game_id: gameId,
       player: playerName,
@@ -280,8 +312,20 @@ export default function AdminPage() {
       total_points: score.totalPoints,
     }))
 
-    await supabase.from('jungle_scores').delete().eq('game_id', gameId)
-    if (scoresToInsert.length > 0) await supabase.from('jungle_scores').insert(scoresToInsert)
+    const { error: deleteError } = await supabase.from('jungle_scores').delete().eq('game_id', gameId)
+    if (deleteError) {
+      alert('Failed to clear old scores: ' + deleteError.message)
+      setSavingResults(false)
+      return
+    }
+    if (scoresToInsert.length > 0) {
+      const { error: insertError } = await supabase.from('jungle_scores').insert(scoresToInsert)
+      if (insertError) {
+        alert('Failed to save scores: ' + insertError.message)
+        setSavingResults(false)
+        return
+      }
+    }
 
     setCalculated(true)
     setSavingResults(false)
