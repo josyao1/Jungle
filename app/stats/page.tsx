@@ -366,34 +366,71 @@ export default function StatsPage() {
       <div className="glass-card rounded-2xl p-4 md:p-6">
         <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-4">Season Schedule</h2>
         <div className="overflow-x-auto mobile-scroll -mx-4 px-4 md:mx-0 md:px-0">
-          <div className="flex md:grid md:grid-cols-5 gap-3 md:gap-4 min-w-max md:min-w-0">
+          <div className="flex md:grid md:grid-cols-4 gap-3 md:gap-4 min-w-max md:min-w-0">
             {GAMES.map(g => {
               const isForfeited = forfeitedWeeks.has(g.number)
-              const dateLabel: Record<number, string> = { 1: 'Apr 12', 2: 'Apr 19', 3: 'Apr 26', 4: 'May 3', 5: 'May 10' }
+              const dateLabel: Record<number, string> = { 1: 'Apr 12', 2: 'Apr 19', 3: 'Apr 26' }
+              const isHome = g.home
               return (
                 <div key={g.number}
-                  className={`glass-card rounded-xl p-3 md:p-4 text-center w-36 md:w-auto flex-shrink-0 md:flex-shrink ${isForfeited ? 'border border-red-500/30' : ''}`}>
-                  <div className="text-slate-500 text-xs mb-1">
+                  className={`rounded-xl p-3 md:p-4 text-center w-36 md:w-auto flex-shrink-0 md:flex-shrink ${isForfeited ? 'border border-red-500/30' : ''}`}
+                  style={{
+                    background: isHome
+                      ? 'rgba(168,85,247,0.12)'
+                      : 'rgba(248,250,252,0.06)',
+                    border: isForfeited
+                      ? '1px solid rgba(239,68,68,0.3)'
+                      : isHome
+                        ? '1px solid rgba(168,85,247,0.35)'
+                        : '1px solid rgba(248,250,252,0.18)',
+                  }}
+                >
+                  <div className="text-xs mb-1" style={{ color: isHome ? 'rgba(192,132,252,0.7)' : 'rgba(148,163,184,0.6)', fontFamily: "'JetBrains Mono', monospace" }}>
                     {dateLabel[g.number] || `Week ${g.number}`}
                   </div>
-                  <div className="text-sm font-medium text-slate-300 mb-2">{g.label}</div>
+                  <div className="text-sm font-semibold mb-1" style={{ color: isHome ? '#c084fc' : '#f1f5f9' }}>{g.label}</div>
+                  <div className="text-xs uppercase tracking-widest mb-2" style={{ color: isHome ? 'rgba(192,132,252,0.55)' : 'rgba(241,245,249,0.4)', fontFamily: "'JetBrains Mono', monospace" }}>
+                    {isHome ? 'HOME' : 'AWAY'}
+                  </div>
                   {isForfeited ? (
                     <div className="text-red-400 text-sm font-semibold">FORFEITED</div>
                   ) : (
-                    <div className="text-slate-600 text-sm mt-2">TBD</div>
+                    <div className="text-xs font-medium leading-tight" style={{ color: isHome ? '#d8b4fe' : '#e2e8f0' }}>
+                      vs. {g.opponent}
+                    </div>
                   )}
                 </div>
               )
             })}
+
+            {/* Playoff Week 1 — TBD */}
+            <div
+              className="rounded-xl p-3 md:p-4 text-center w-36 md:w-auto flex-shrink-0 md:flex-shrink"
+              style={{
+                background: 'rgba(245,158,11,0.08)',
+                border: '1px solid rgba(245,158,11,0.3)',
+              }}
+            >
+              <div className="text-xs mb-1" style={{ color: 'rgba(245,158,11,0.6)', fontFamily: "'JetBrains Mono', monospace" }}>
+                TBD
+              </div>
+              <div className="text-sm font-semibold mb-1" style={{ color: '#f59e0b' }}>Playoffs</div>
+              <div className="text-xs uppercase tracking-widest mb-2" style={{ color: 'rgba(245,158,11,0.5)', fontFamily: "'JetBrains Mono', monospace" }}>
+                Week 1
+              </div>
+              <div className="font-bold whitespace-nowrap" style={{ color: '#f59e0b', fontFamily: "'JetBrains Mono', monospace", fontSize: '0.55rem', letterSpacing: '0.05em' }}>
+                WE WILL BE MAKING THE PLAYOFFS
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Team MVP Highlights — 5 blocks like the schedule, one per week */}
+      {/* Team MVP Highlights — 3 blocks like the schedule, one per week */}
       <div className="glass-card rounded-2xl p-4 md:p-6">
         <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-4">Weekly MVP</h2>
         <div className="overflow-x-auto mobile-scroll -mx-4 px-4 md:mx-0 md:px-0">
-          <div className="flex md:grid md:grid-cols-5 gap-3 md:gap-4 min-w-max md:min-w-0">
+          <div className="flex md:grid md:grid-cols-3 gap-3 md:gap-4 min-w-max md:min-w-0">
             {GAMES.map(g => {
               const h = weeklyHighlights.get(g.number)
               const mvp = h?.mvp_player

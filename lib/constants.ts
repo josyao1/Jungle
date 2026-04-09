@@ -4,7 +4,7 @@
  * Defines:
  *  - PLAYERS / BETTORS: All 9 players (everyone bets on everyone)
  *  - STATS: Softball stat categories tracked per game
- *  - GAMES: 5-week season schedule (Sundays at 3pm CDT starting Apr 12, 2026)
+ *  - GAMES: 3-week season schedule (Sundays at 3pm CDT starting Apr 12, 2026)
  *  - Helper functions for game phase and current game detection
  *
  * Player availability (injuries/absences) is managed dynamically in the
@@ -79,30 +79,24 @@ export const GAMES = [
     label: 'Week 1',
     date: new Date('2026-04-12T20:00:00Z'), // Apr 12 at 3pm CDT
     lockTime: new Date('2026-04-12T20:00:00Z'),
+    opponent: 'UV Catastrophe',
+    home: true,
   },
   {
     number: 2,
     label: 'Week 2',
     date: new Date('2026-04-19T20:00:00Z'), // Apr 19
     lockTime: new Date('2026-04-19T20:00:00Z'),
+    opponent: 'Bob Nighten-Gales',
+    home: false,
   },
   {
     number: 3,
     label: 'Week 3',
     date: new Date('2026-04-26T20:00:00Z'), // Apr 26
     lockTime: new Date('2026-04-26T20:00:00Z'),
-  },
-  {
-    number: 4,
-    label: 'Week 4',
-    date: new Date('2026-05-03T20:00:00Z'), // May 3
-    lockTime: new Date('2026-05-03T20:00:00Z'),
-  },
-  {
-    number: 5,
-    label: 'Week 5',
-    date: new Date('2026-05-10T20:00:00Z'), // May 10
-    lockTime: new Date('2026-05-10T20:00:00Z'),
+    opponent: 'INOBLACKIDOMINICAN',
+    home: true,
   },
 ]
 
