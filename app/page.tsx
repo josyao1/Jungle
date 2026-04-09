@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic'
 import { useState } from 'react'
 import PlayerSelect from '@/components/PlayerSelect'
 import GameStatus from '@/components/GameStatus'
-import { Player } from '@/lib/constants'
+import { Player, GAMES } from '@/lib/constants'
 
 export default function Home() {
   const [player, setPlayer] = useState<Player | null>(null)
@@ -25,6 +25,49 @@ export default function Home() {
           <span className="text-gradient-brand">JUNGLE</span>
         </h1>
         <p className="text-slate-500 text-sm">IM Softball Sportsbook · Spring 2026</p>
+      </div>
+
+      {/* Season Schedule */}
+      <div className="glass-card rounded-2xl p-4">
+        <h2 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-3" style={{ fontFamily: "'JetBrains Mono', monospace" }}>Season Schedule</h2>
+        <div className="overflow-x-auto mobile-scroll -mx-4 px-4 md:mx-0 md:px-0">
+        <div className="flex md:grid md:grid-cols-4 gap-2 min-w-max md:min-w-0">
+          {GAMES.map(g => {
+            const dateLabel: Record<number, string> = { 1: 'Apr 12', 2: 'Apr 19', 3: 'Apr 26' }
+            const isHome = g.home
+            return (
+              <div key={g.number}
+                className="rounded-xl p-2.5 text-center w-32 flex-shrink-0 md:w-auto md:flex-shrink"
+                style={{
+                  background: isHome ? 'rgba(168,85,247,0.12)' : 'rgba(248,250,252,0.06)',
+                  border: isHome ? '1px solid rgba(168,85,247,0.35)' : '1px solid rgba(248,250,252,0.18)',
+                }}
+              >
+                <div className="text-xs mb-0.5" style={{ color: isHome ? 'rgba(192,132,252,0.7)' : 'rgba(148,163,184,0.6)', fontFamily: "'JetBrains Mono', monospace" }}>
+                  {dateLabel[g.number]}
+                </div>
+                <div className="text-xs font-semibold mb-0.5" style={{ color: isHome ? '#c084fc' : '#f1f5f9' }}>{g.label}</div>
+                <div className="text-xs uppercase tracking-widest mb-1" style={{ color: isHome ? 'rgba(192,132,252,0.55)' : 'rgba(241,245,249,0.4)', fontFamily: "'JetBrains Mono', monospace", fontSize: '0.6rem' }}>
+                  {isHome ? 'HOME' : 'AWAY'}
+                </div>
+                <div className="font-medium leading-tight" style={{ color: isHome ? '#d8b4fe' : '#e2e8f0', fontSize: '0.6rem' }}>
+                  vs. {g.opponent}
+                </div>
+              </div>
+            )
+          })}
+
+          {/* Playoff Week 1 */}
+          <div className="rounded-xl p-2.5 text-center w-32 flex-shrink-0 md:w-auto md:flex-shrink" style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.3)' }}>
+            <div className="text-xs mb-0.5" style={{ color: 'rgba(245,158,11,0.6)', fontFamily: "'JetBrains Mono', monospace" }}>TBD</div>
+            <div className="text-xs font-semibold mb-0.5" style={{ color: '#f59e0b' }}>Playoffs</div>
+            <div className="text-xs uppercase tracking-widest mb-1" style={{ color: 'rgba(245,158,11,0.5)', fontFamily: "'JetBrains Mono', monospace", fontSize: '0.6rem' }}>Week 1</div>
+            <div className="font-bold" style={{ color: '#f59e0b', fontFamily: "'JetBrains Mono', monospace", fontSize: '0.5rem', letterSpacing: '0.03em', lineHeight: 1.4 }}>
+              WE WILL BE MAKING THE PLAYOFFS
+            </div>
+          </div>
+        </div>
+        </div>
       </div>
 
       <div className="glass-card rounded-2xl p-5 space-y-3">
