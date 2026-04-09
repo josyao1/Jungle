@@ -242,7 +242,7 @@ export default function LeaderboardPage() {
               {/* Expanded game breakdown */}
               {isExpanded && (
                 <div className="mt-1 px-1">
-                  <div className="grid grid-cols-5 gap-1.5">
+                  <div className="grid grid-cols-3 gap-1.5">
                     {GAMES.map(g => {
                       const gs = entry.games.find(s => s.game_number === g.number)
                       return (
