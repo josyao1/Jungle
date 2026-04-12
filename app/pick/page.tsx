@@ -15,7 +15,7 @@ import { supabase, Line, Pick, getInactivePlayersForGame } from '@/lib/supabase'
 import { calculateAveragedLine } from '@/lib/utils'
 
 const STAT_SHORT: Record<string, string> = {
-  hits: 'H', rbis: 'RBI', totalbases: 'Total Bases', errors: 'Errors', strikeouts: 'K',
+  hits: 'H', rbis: 'RBI', runs: 'R', errors: 'Errors', strikeouts: 'K',
 }
 
 export default function PickPage() {
@@ -200,7 +200,8 @@ export default function PickPage() {
       console.error('[calculateAndSaveLines] delete failed:', deleteError.message)
       return
     }
-    await supabase.from('jungle_lines').insert(linesToInsert)
+    const { error: insertError } = await supabase.from('jungle_lines').insert(linesToInsert)
+    if (insertError) console.error('[calculateAndSaveLines] insert failed:', insertError.message)
   }
 
   useEffect(() => { loadData() }, [loadData])

@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic'
  */
 
 import { useState, useEffect, useCallback } from 'react'
-import { PLAYERS, STATS, STAT_LABELS, GAMES, getPlayersForGame, WEEK1_ONLY_PLAYERS, sortWithInactiveAtBottom, Stat, PLAYER_HUES, PLAYERS_WITH_PHOTOS } from '@/lib/constants'
+import { PLAYERS, STATS, STAT_LABELS, GAMES, getPlayersForGame, WEEK1_ONLY_PLAYERS, Stat, PLAYER_HUES, PLAYERS_WITH_PHOTOS, PROP_BET_LABELS, PROP_BETS } from '@/lib/constants'
 import { supabase } from '@/lib/supabase'
 
 interface PlayerStats {
@@ -18,8 +18,14 @@ interface PlayerStats {
   stats: Record<Stat, { total: number; games: number; perGame: number }>
   totalHits: number
   totalAb: number
+  totalIp: number
+  totalRunsAllowed: number
+  totalHomeruns: number
   gamesPlayed: number
 }
+
+// Hitting stats shown in the top table (K moves to pitching section)
+const HITTING_STATS: Stat[] = ['hits', 'rbis', 'runs', 'errors']
 
 interface WeeklyHighlight {
   mvp_player: string | null
@@ -44,14 +50,29 @@ const ATHLETE_NAMES: Record<string, string> = {
   teja:   'A. Siluveru',
   Neo:    'N. Trovela-Villamiel',
   Tommy:  'T. Matthys',
-  Alan:   'Alan',
-  Reis:   'Reis',
+  Alan:   'Shohei',
 }
 
 function formatBA(hits: number, ab: number): string {
   if (ab === 0) return '.---'
-  const ba = hits / ab
-  return '.' + Math.round(ba * 1000).toString().padStart(3, '0')
+  const rounded = Math.round((hits / ab) * 1000)
+  if (rounded >= 1000) return '1.000'
+  return '.' + rounded.toString().padStart(3, '0')
+}
+
+// IP is stored as thirds-of-an-inning in the DB (e.g. 1.1 innings = 4 thirds)
+function thirdsToIpDisplay(thirds: number): string {
+  if (thirds === 0) return '0'
+  const full = Math.floor(thirds / 3)
+  const rem = thirds % 3
+  return rem > 0 ? `${full}.${rem}` : `${full}`
+}
+
+// ERA for softball: (runsAllowed / actualInnings) * 7
+// thirds = total innings pitched stored as thirds
+function formatERA(runsAllowed: number, thirds: number): string {
+  if (thirds === 0) return '—'
+  return ((runsAllowed / (thirds / 3)) * 7).toFixed(2)
 }
 
 export default function StatsPage() {
@@ -63,16 +84,18 @@ export default function StatsPage() {
   // Map<gameNumber, Map<playerName, reason>>
   const [weeklyInactive, setWeeklyInactive] = useState<Map<number, Map<string, string>>>(new Map())
   const [weeklyHighlights, setWeeklyHighlights] = useState<Map<number, WeeklyHighlight>>(new Map())
+  const [weeklyPropResults, setWeeklyPropResults] = useState<Map<number, Record<string, { winners: string[], blurb: string }>>>(new Map())
   const [loading, setLoading] = useState(true)
-  const [sortColumn, setSortColumn] = useState<SortColumn>('player')
-  const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
+  const [sortColumn, setSortColumn] = useState<SortColumn>('ba')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
 
   const loadData = useCallback(async () => {
-    const [{ data: results }, { data: games }, { data: availData }, { data: highlights }] = await Promise.all([
+    const [{ data: results }, { data: games }, { data: availData }, { data: highlights }, { data: propResultsData }] = await Promise.all([
       supabase.from('jungle_results').select('*'),
       supabase.from('jungle_games').select('id, game_number, forfeited'),
       supabase.from('jungle_player_availability').select('game_id, player, active, reason'),
       supabase.from('jungle_weekly_highlights').select('game_id, mvp_player, mvp_blurb'),
+      supabase.from('jungle_prop_results').select('*'),
     ])
 
     if (!results) { setLoading(false); return }
@@ -121,6 +144,24 @@ export default function StatsPage() {
     })
     setWeeklyHighlights(highlightMap)
 
+    // Build prop results map: gameNumber → { propType → { winners, blurb } }
+    const propMap = new Map<number, Record<string, { winners: string[], blurb: string }>>()
+    propResultsData?.forEach((pr: any) => {
+      const gameNum = gameMap.get(pr.game_id)
+      if (!gameNum) return
+      if (!propMap.has(gameNum)) propMap.set(gameNum, {})
+      const entry = propMap.get(gameNum)!
+      if (pr.prop_type.endsWith('_blurb')) {
+        const base = pr.prop_type.replace('_blurb', '')
+        if (!entry[base]) entry[base] = { winners: [], blurb: '' }
+        entry[base].blurb = pr.winner
+      } else {
+        if (!entry[pr.prop_type]) entry[pr.prop_type] = { winners: [], blurb: '' }
+        entry[pr.prop_type].winners = pr.winner.split(',').map((w: string) => w.trim())
+      }
+    })
+    setWeeklyPropResults(propMap)
+
     // Season totals — only count stats from games where player was active
     const aggregated: PlayerStats[] = PLAYERS.map(player => {
       const statsObj: Record<string, { total: number; games: number; perGame: number }> = {}
@@ -139,22 +180,27 @@ export default function StatsPage() {
         statsObj[stat] = { total, games: gamesCount, perGame }
       })
 
-      // Season AB for batting average
-      const abResults = results.filter(r => {
+      const pitchingFilter = (stat: string) => (r: any) => {
         const gameNum = gameMap.get(r.game_id)
         if (!gameNum || forfeited.has(gameNum)) return false
         const active = activeByGame.get(gameNum)
-        return r.player === player && r.stat === 'ab' && (active?.includes(player) ?? true)
-      })
-      const totalAb = abResults.reduce((sum, r) => sum + (r.value || 0), 0)
+        return r.player === player && r.stat === stat && (active?.includes(player) ?? true)
+      }
+
+      const totalAb = results.filter(pitchingFilter('ab')).reduce((sum, r) => sum + (r.value || 0), 0)
+      const totalIp = results.filter(pitchingFilter('ip')).reduce((sum, r) => sum + (r.value || 0), 0)
+      const totalRunsAllowed = results.filter(pitchingFilter('runs_allowed')).reduce((sum, r) => sum + (r.value || 0), 0)
+      const totalHomeruns = results.filter(pitchingFilter('homeruns')).reduce((sum, r) => sum + (r.value || 0), 0)
       const totalHits = statsObj['hits']?.total ?? 0
 
-      // GP = number of non-forfeited games where this player was active AND results have been entered
-      const gamesPlayed = Array.from(activeByGame.entries())
-        .filter(([gameNum, activePlayers]) => !forfeited.has(gameNum) && activePlayers.includes(player) && gamesWithResults.has(gameNum))
-        .length
+      // GP = distinct games where stats were actually recorded for this player (not just "active")
+      const gamesPlayed = new Set(
+        results
+          .filter(r => r.player === player && !forfeited.has(gameMap.get(r.game_id) ?? -1))
+          .map(r => r.game_id)
+      ).size
 
-      return { player, stats: statsObj as Record<Stat, { total: number; games: number; perGame: number }>, totalHits, totalAb, gamesPlayed }
+      return { player, stats: statsObj as Record<Stat, { total: number; games: number; perGame: number }>, totalHits, totalAb, totalIp, totalRunsAllowed, totalHomeruns, gamesPlayed }
     })
 
     setPlayerStats(aggregated)
@@ -182,13 +228,22 @@ export default function StatsPage() {
           statsObj[stat] = { total, games: playerResults.length > 0 ? 1 : 0, perGame: total }
         })
 
-        const weekAb = (!isInactive && gameId)
-          ? results.filter(r => r.player === player && r.stat === 'ab' && gameMap.get(r.game_id) === g.number)
+        const weekStat = (stat: string) => (!isInactive && gameId)
+          ? results.filter(r => r.player === player && r.stat === stat && gameMap.get(r.game_id) === g.number)
               .reduce((sum, r) => sum + (r.value || 0), 0)
           : 0
         const weekHits = statsObj['hits']?.total ?? 0
 
-        return { player, stats: statsObj as Record<Stat, { total: number; games: number; perGame: number }>, totalHits: weekHits, totalAb: weekAb, gamesPlayed: isInactive ? 0 : 1 }
+        return {
+          player,
+          stats: statsObj as Record<Stat, { total: number; games: number; perGame: number }>,
+          totalHits: weekHits,
+          totalAb: weekStat('ab'),
+          totalIp: weekStat('ip'),
+          totalRunsAllowed: weekStat('runs_allowed'),
+          totalHomeruns: weekStat('homeruns'),
+          gamesPlayed: isInactive ? 0 : 1,
+        }
       })
 
       weeklyMap.set(g.number, weekStats)
@@ -216,29 +271,31 @@ export default function StatsPage() {
   const currentInactive = selectedWeek !== 'all' ? (weeklyInactive.get(selectedWeek as number) ?? new Map<string, string>()) : new Map<string, string>()
 
   const sortedStats = [...displayStats].sort((a, b) => {
+    // Tier 1: inactive always at very bottom
+    const aOut = currentInactive.has(a.player) ? 2 : 0
+    const bOut = currentInactive.has(b.player) ? 2 : 0
+    if (aOut !== bOut) return aOut - bOut
+
+    // Tier 2: week-1-only guests below the regular roster
+    const aGuest = WEEK1_ONLY_PLAYERS.has(a.player) ? 1 : 0
+    const bGuest = WEEK1_ONLY_PLAYERS.has(b.player) ? 1 : 0
+    if (aGuest !== bGuest) return aGuest - bGuest
+
+    // Tier 3: primary sort column
     let comparison = 0
     if (sortColumn === 'player') {
       comparison = a.player.localeCompare(b.player)
     } else if (sortColumn === 'ba') {
-      const aBA = a.totalAb > 0 ? a.totalHits / a.totalAb : 0
-      const bBA = b.totalAb > 0 ? b.totalHits / b.totalAb : 0
-      comparison = aBA - bBA
+      const aNoAb = a.totalAb === 0
+      const bNoAb = b.totalAb === 0
+      if (aNoAb !== bNoAb) return aNoAb ? 1 : -1
+      comparison = (a.totalHits / a.totalAb) - (b.totalHits / b.totalAb)
     } else {
       const aVal = mode === 'total' || selectedWeek !== 'all' ? a.stats[sortColumn].total : a.stats[sortColumn].perGame
       const bVal = mode === 'total' || selectedWeek !== 'all' ? b.stats[sortColumn].total : b.stats[sortColumn].perGame
       comparison = aVal - bVal
     }
     return sortDirection === 'asc' ? comparison : -comparison
-  }).sort((a, b) => {
-    // Guest (week-1-only) players always sink below the regular roster
-    const aGuest = WEEK1_ONLY_PLAYERS.has(a.player) ? 1 : 0
-    const bGuest = WEEK1_ONLY_PLAYERS.has(b.player) ? 1 : 0
-    return aGuest - bGuest
-  }).sort((a, b) => {
-    // Inactive players always sink to very bottom regardless of sort column
-    const aOut = currentInactive.has(a.player) ? 1 : 0
-    const bOut = currentInactive.has(b.player) ? 1 : 0
-    return aOut - bOut
   })
 
   const SortIcon = ({ column }: { column: SortColumn }) => {
@@ -250,6 +307,41 @@ export default function StatsPage() {
 
   return (
     <div className="space-y-6">
+      {/* Season Schedule — compact strip */}
+      <div className="glass-card rounded-2xl px-4 py-3">
+        <div className="overflow-x-auto mobile-scroll -mx-4 px-4 md:mx-0 md:px-0">
+          <div className="flex gap-2 min-w-max md:min-w-0">
+            {GAMES.map(g => {
+              const isForfeited = forfeitedWeeks.has(g.number)
+              const dateLabel: Record<number, string> = { 1: 'Apr 12', 2: 'Apr 19', 3: 'Apr 26' }
+              const isHome = g.home
+              const score = 'finalScore' in g ? g.finalScore : undefined
+              return (
+                <div key={g.number} className="flex items-center gap-2 rounded-xl px-3 py-2"
+                  style={{
+                    background: isHome ? 'rgba(168,85,247,0.08)' : 'rgba(248,250,252,0.04)',
+                    border: isForfeited ? '1px solid rgba(239,68,68,0.3)' : isHome ? '1px solid rgba(168,85,247,0.25)' : '1px solid rgba(255,255,255,0.07)',
+                  }}>
+                  <span className="text-xs shrink-0" style={{ color: '#475569', fontFamily: "'JetBrains Mono', monospace" }}>{dateLabel[g.number]}</span>
+                  <span className="text-xs font-semibold" style={{ color: isHome ? '#c084fc' : '#94a3b8' }}>{g.label}</span>
+                  {isForfeited
+                    ? <span className="text-xs font-bold text-red-400">FORF</span>
+                    : score
+                      ? <span className="text-xs font-bold shrink-0" style={{ color: '#4ade80', fontFamily: "'Bebas Neue', sans-serif", letterSpacing: '0.06em' }}>W {score}</span>
+                      : <span className="text-xs" style={{ color: '#1e293b' }}>vs. {g.opponent}</span>
+                  }
+                </div>
+              )
+            })}
+            <div className="flex items-center gap-2 rounded-xl px-3 py-2"
+              style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.2)' }}>
+              <span className="text-xs shrink-0" style={{ color: 'rgba(245,158,11,0.5)', fontFamily: "'JetBrains Mono', monospace" }}>TBD</span>
+              <span className="text-xs font-semibold" style={{ color: '#f59e0b' }}>Playoffs</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-xl md:text-2xl font-bold">
           {selectedWeek === 'all' ? 'Season Stats' : `${GAMES.find(g => g.number === selectedWeek)?.label || `Week ${selectedWeek}`} Stats`}
@@ -278,105 +370,180 @@ export default function StatsPage() {
         </div>
       )}
 
+      {/* ── Hitting Stats ── */}
       <div className="glass-card rounded-2xl p-3 md:p-4 overflow-x-auto mobile-scroll">
-        <div style={{ minWidth: '710px', width: '100%' }}>
-        {/* Column headers */}
-        <div className="grid items-center pb-2 mb-1 px-2"
-          style={{
-            gridTemplateColumns: 'minmax(180px,1fr) minmax(90px,1fr) minmax(70px,1fr) minmax(110px,1fr) minmax(90px,1fr) minmax(100px,1fr) minmax(70px,1fr)',
-            borderBottom: '1px solid rgba(34,197,94,0.07)',
-          }}>
-          <button onClick={() => handleSort('player')} className="flex items-center gap-1 text-xs text-slate-600 uppercase tracking-wider font-bold hover:text-slate-300 transition-colors select-none text-left">
-            Player <SortIcon column="player" />
-          </button>
-          {STATS.map(stat => (
-            <button key={stat} onClick={() => handleSort(stat)}
-              className="flex items-center justify-center gap-1 text-xs text-slate-600 uppercase tracking-wider font-bold hover:text-slate-300 transition-colors select-none"
-              style={{ whiteSpace: 'nowrap' }}>
-              {STAT_LABELS[stat]} <SortIcon column={stat} />
+        <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2 px-1">Hitting</p>
+        <div style={{ minWidth: '580px', width: '100%' }}>
+          {/* Column headers */}
+          <div className="grid items-center pb-2 mb-1 px-2"
+            style={{
+              gridTemplateColumns: 'minmax(180px,1fr) repeat(4, minmax(80px,1fr)) minmax(70px,1fr)',
+              borderBottom: '1px solid rgba(34,197,94,0.07)',
+            }}>
+            <button onClick={() => handleSort('player')} className="flex items-center gap-1 text-xs text-slate-600 uppercase tracking-wider font-bold hover:text-slate-300 transition-colors select-none text-left">
+              Player <SortIcon column="player" />
             </button>
-          ))}
-          <button onClick={() => handleSort('ba')}
-            className="flex items-center justify-center gap-1 text-xs uppercase tracking-wider font-bold transition-colors select-none"
-            style={{ color: 'var(--amber-warm)', opacity: 0.75 }}>
-            BA <SortIcon column="ba" />
-          </button>
-        </div>
+            {HITTING_STATS.map(stat => (
+              <button key={stat} onClick={() => handleSort(stat)}
+                className="flex items-center justify-center gap-1 text-xs text-slate-600 uppercase tracking-wider font-bold hover:text-slate-300 transition-colors select-none"
+                style={{ whiteSpace: 'nowrap' }}>
+                {STAT_LABELS[stat]} <SortIcon column={stat} />
+              </button>
+            ))}
+            <button onClick={() => handleSort('ba')}
+              className="flex items-center justify-center gap-1 text-xs uppercase tracking-wider font-bold transition-colors select-none"
+              style={{ color: 'var(--amber-warm)', opacity: 0.75 }}>
+              BA <SortIcon column="ba" />
+            </button>
+          </div>
 
-        {/* Player card rows */}
-        <div className="space-y-1.5">
-          {sortedStats.map(({ player, stats, totalHits, totalAb, gamesPlayed }) => {
-            const isInactiveThisWeek = selectedWeek !== 'all' && (weeklyInactive.get(selectedWeek as number)?.has(player) ?? false)
-            const color = PLAYER_HUES[player] || '#22c55e'
-            const hasPhoto = PLAYERS_WITH_PHOTOS.has(player)
+          {/* Player rows */}
+          <div className="space-y-1.5">
+            {sortedStats.map(({ player, stats, totalHits, totalAb, totalHomeruns, gamesPlayed }) => {
+              const isInactiveThisWeek = selectedWeek !== 'all' && (weeklyInactive.get(selectedWeek as number)?.has(player) ?? false)
+              const color = PLAYER_HUES[player] || '#22c55e'
+              const hasPhoto = PLAYERS_WITH_PHOTOS.has(player)
 
-            return (
-              <div key={player}
-                className="grid items-center rounded-xl px-2 py-2.5"
-                style={{
-                  gridTemplateColumns: 'minmax(180px,1fr) minmax(90px,1fr) minmax(70px,1fr) minmax(110px,1fr) minmax(90px,1fr) minmax(100px,1fr) minmax(70px,1fr)',
-                  background: isInactiveThisWeek ? 'rgba(6,11,8,0.3)' : 'rgba(15,35,24,0.5)',
-                  border: `1px solid ${isInactiveThisWeek ? 'rgba(255,255,255,0.04)' : `${color}12`}`,
-                  borderLeft: `3px solid ${isInactiveThisWeek ? 'rgba(100,116,139,0.2)' : color}`,
-                  opacity: isInactiveThisWeek ? 0.55 : 1,
-                }}>
-
-                {/* Player cell */}
-                <div className="flex items-center gap-2 min-w-0">
-                  <div className="w-7 h-7 rounded-full shrink-0 overflow-hidden flex items-center justify-center"
-                    style={{ background: hasPhoto ? undefined : `${color}18`, border: `1.5px solid ${color}40` }}>
-                    {hasPhoto
-                      ? <img src={`/players/${player.toLowerCase()}.png`} alt={player} className="w-full h-full object-cover" />
-                      : <span style={{ color, fontSize: '0.6rem', fontFamily: "'Bebas Neue', sans-serif", letterSpacing: '0.04em' }}>{player.charAt(0).toUpperCase()}</span>
-                    }
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex items-baseline gap-1.5">
-                      <span className="text-sm font-semibold text-slate-200 truncate">{ATHLETE_NAMES[player] ?? player}</span>
-                      {!isInactiveThisWeek && gamesPlayed > 0 && (
-                        <span className="text-xs shrink-0" style={{ color: '#334155', fontFamily: "'JetBrains Mono', monospace" }}>({gamesPlayed}GP)</span>
+              return (
+                <div key={player}
+                  className="grid items-center rounded-xl px-2 py-2.5"
+                  style={{
+                    gridTemplateColumns: 'minmax(180px,1fr) repeat(4, minmax(80px,1fr)) minmax(70px,1fr)',
+                    background: isInactiveThisWeek ? 'rgba(6,11,8,0.3)' : 'rgba(15,35,24,0.5)',
+                    border: `1px solid ${isInactiveThisWeek ? 'rgba(255,255,255,0.04)' : `${color}12`}`,
+                    borderLeft: `3px solid ${isInactiveThisWeek ? 'rgba(100,116,139,0.2)' : color}`,
+                    opacity: isInactiveThisWeek ? 0.55 : 1,
+                  }}>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-7 h-7 rounded-full shrink-0 overflow-hidden flex items-center justify-center"
+                      style={{ background: hasPhoto ? undefined : `${color}18`, border: `1.5px solid ${color}40` }}>
+                      {hasPhoto
+                        ? <img src={`/players/${player.toLowerCase()}.png`} alt={player} className="w-full h-full object-cover" />
+                        : <span style={{ color, fontSize: '0.6rem', fontFamily: "'Bebas Neue', sans-serif", letterSpacing: '0.04em' }}>{player.charAt(0).toUpperCase()}</span>
+                      }
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-baseline gap-1.5 flex-wrap">
+                        <span className="text-sm font-semibold text-slate-200 truncate">{ATHLETE_NAMES[player] ?? player}</span>
+                        {!isInactiveThisWeek && gamesPlayed > 0 && (
+                          <span className="text-xs shrink-0" style={{ color: '#334155', fontFamily: "'JetBrains Mono', monospace" }}>({gamesPlayed}GP)</span>
+                        )}
+                        {!isInactiveThisWeek && totalHomeruns > 0 && (
+                          <span className="text-xs shrink-0 px-1.5 py-0.5 rounded-full font-bold"
+                            style={{ background: 'rgba(234,179,8,0.15)', color: '#eab308', border: '1px solid rgba(234,179,8,0.35)', fontFamily: "'JetBrains Mono', monospace", lineHeight: 1 }}>
+                            {totalHomeruns} HR
+                          </span>
+                        )}
+                      </div>
+                      {isInactiveThisWeek && (
+                        <span className="badge badge-out">{weeklyInactive.get(selectedWeek as number)?.get(player) || 'OUT'}</span>
                       )}
                     </div>
-                    {isInactiveThisWeek && (
-                      <span className="badge badge-out">{weeklyInactive.get(selectedWeek as number)?.get(player) || 'OUT'}</span>
+                  </div>
+                  {HITTING_STATS.map(stat => (
+                    <div key={stat} className="text-center">
+                      {isInactiveThisWeek ? <span className="text-slate-700 text-sm">—</span> : (
+                        <>
+                          <span className="font-bold stat-value text-sm">
+                            {selectedWeek === 'all' ? (mode === 'total' ? stats[stat].total : stats[stat].perGame) : stats[stat].total}
+                          </span>
+                          {selectedWeek === 'all' && mode === 'perGame' && stats[stat].games > 0 && (
+                            <span className="text-slate-600 text-xs ml-0.5">({stats[stat].games}g)</span>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  ))}
+                  <div className="text-center">
+                    {isInactiveThisWeek ? <span className="text-slate-700 text-sm">—</span> : (
+                      <span className="font-bold text-sm" style={{ color: 'var(--amber-warm)', fontFamily: "'JetBrains Mono', monospace" }}>
+                        {formatBA(totalHits, totalAb)}
+                      </span>
                     )}
                   </div>
                 </div>
-
-                {/* Stat value cells */}
-                {STATS.map(stat => (
-                  <div key={stat} className="text-center">
-                    {isInactiveThisWeek ? (
-                      <span className="text-slate-700 text-sm">—</span>
-                    ) : (
-                      <>
-                        <span className="font-bold stat-value text-sm">
-                          {selectedWeek === 'all'
-                            ? (mode === 'total' ? stats[stat].total : stats[stat].perGame)
-                            : stats[stat].total}
-                        </span>
-                        {selectedWeek === 'all' && mode === 'perGame' && stats[stat].games > 0 && (
-                          <span className="text-slate-600 text-xs ml-0.5">({stats[stat].games}g)</span>
-                        )}
-                      </>
-                    )}
-                  </div>
-                ))}
-
-                {/* BA column */}
-                <div className="text-center">
-                  {isInactiveThisWeek ? (
-                    <span className="text-slate-700 text-sm">—</span>
-                  ) : (
-                    <span className="font-bold text-sm" style={{ color: 'var(--amber-warm)', fontFamily: "'JetBrains Mono', monospace" }}>
-                      {formatBA(totalHits, totalAb)}
-                    </span>
-                  )}
-                </div>
-              </div>
-            )
-          })}
+              )
+            })}
+          </div>
         </div>
+      </div>
+
+      {/* ── Pitching Stats ── */}
+      <div className="glass-card rounded-2xl p-3 md:p-4 overflow-x-auto mobile-scroll">
+        <p className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-2 px-1">Pitching</p>
+        <div style={{ minWidth: '560px', width: '100%' }}>
+          <div className="grid items-center pb-2 mb-1 px-2"
+            style={{
+              gridTemplateColumns: 'minmax(180px,1fr) repeat(4, minmax(80px,1fr))',
+              borderBottom: '1px solid rgba(99,102,241,0.1)',
+            }}>
+            <span className="text-xs text-slate-600 uppercase tracking-wider font-bold">Player</span>
+            {(['IP', 'R', 'ERA', 'K'] as const).map(h => (
+              <span key={h} className="text-center text-xs text-slate-600 uppercase tracking-wider font-bold">{h}</span>
+            ))}
+          </div>
+          {sortedStats.every(({ totalIp, totalRunsAllowed }) => totalIp === 0 && totalRunsAllowed === 0) && (
+            <p className="text-slate-600 text-xs px-2 py-3">No pitching stats recorded yet.</p>
+          )}
+          <div className="space-y-1.5">
+            {sortedStats.filter(({ totalIp, totalRunsAllowed }) => totalIp > 0 || totalRunsAllowed > 0).map(({ player, stats, totalIp, totalRunsAllowed }) => {
+              const isInactiveThisWeek = selectedWeek !== 'all' && (weeklyInactive.get(selectedWeek as number)?.has(player) ?? false)
+              const color = PLAYER_HUES[player] || '#22c55e'
+              const hasPhoto = PLAYERS_WITH_PHOTOS.has(player)
+              const k = isInactiveThisWeek ? null : (selectedWeek === 'all'
+                ? (mode === 'total' ? stats['strikeouts'].total : stats['strikeouts'].perGame)
+                : stats['strikeouts'].total)
+
+              return (
+                <div key={player}
+                  className="grid items-center rounded-xl px-2 py-2.5"
+                  style={{
+                    gridTemplateColumns: 'minmax(180px,1fr) repeat(4, minmax(80px,1fr))',
+                    background: isInactiveThisWeek ? 'rgba(6,11,8,0.3)' : 'rgba(15,24,35,0.5)',
+                    border: `1px solid ${isInactiveThisWeek ? 'rgba(255,255,255,0.04)' : 'rgba(99,102,241,0.08)'}`,
+                    borderLeft: `3px solid ${isInactiveThisWeek ? 'rgba(100,116,139,0.2)' : 'rgba(99,102,241,0.4)'}`,
+                    opacity: isInactiveThisWeek ? 0.55 : 1,
+                  }}>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-7 h-7 rounded-full shrink-0 overflow-hidden flex items-center justify-center"
+                      style={{ background: hasPhoto ? undefined : `${color}18`, border: `1.5px solid ${color}40` }}>
+                      {hasPhoto
+                        ? <img src={`/players/${player.toLowerCase()}.png`} alt={player} className="w-full h-full object-cover" />
+                        : <span style={{ color, fontSize: '0.6rem', fontFamily: "'Bebas Neue', sans-serif", letterSpacing: '0.04em' }}>{player.charAt(0).toUpperCase()}</span>
+                      }
+                    </div>
+                    <span className="text-sm font-semibold text-slate-200 truncate">{ATHLETE_NAMES[player] ?? player}</span>
+                  </div>
+                  {/* IP */}
+                  <div className="text-center">
+                    {isInactiveThisWeek ? <span className="text-slate-700 text-sm">—</span> : (
+                      <span className="font-bold stat-value text-sm">{thirdsToIpDisplay(totalIp)}</span>
+                    )}
+                  </div>
+                  {/* R (runs allowed) */}
+                  <div className="text-center">
+                    {isInactiveThisWeek ? <span className="text-slate-700 text-sm">—</span> : (
+                      <span className="font-bold stat-value text-sm">{totalRunsAllowed}</span>
+                    )}
+                  </div>
+                  {/* ERA */}
+                  <div className="text-center">
+                    {isInactiveThisWeek ? <span className="text-slate-700 text-sm">—</span> : (
+                      <span className="font-bold text-sm" style={{ color: 'rgba(129,140,248,0.9)', fontFamily: "'JetBrains Mono', monospace" }}>
+                        {formatERA(totalRunsAllowed, totalIp)}
+                      </span>
+                    )}
+                  </div>
+                  {/* K */}
+                  <div className="text-center">
+                    {isInactiveThisWeek ? <span className="text-slate-700 text-sm">—</span> : (
+                      <span className="font-bold stat-value text-sm">{k ?? 0}</span>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         </div>
       </div>
 
@@ -388,67 +555,59 @@ export default function StatsPage() {
           : `Stats from ${GAMES.find(g => g.number === selectedWeek)?.label || `Week ${selectedWeek}`}. Inactive players shown at bottom.`}
       </div>
 
-      {/* Season Schedule */}
+      {/* ── Prop Highlights ── */}
       <div className="glass-card rounded-2xl p-4 md:p-6">
-        <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-4">Season Schedule</h2>
-        <div className="overflow-x-auto mobile-scroll -mx-4 px-4 md:mx-0 md:px-0">
-          <div className="flex md:grid md:grid-cols-4 gap-3 md:gap-4 min-w-max md:min-w-0">
-            {GAMES.map(g => {
-              const isForfeited = forfeitedWeeks.has(g.number)
-              const dateLabel: Record<number, string> = { 1: 'Apr 12', 2: 'Apr 19', 3: 'Apr 26' }
-              const isHome = g.home
-              return (
-                <div key={g.number}
-                  className={`rounded-xl p-3 md:p-4 text-center w-36 md:w-auto flex-shrink-0 md:flex-shrink ${isForfeited ? 'border border-red-500/30' : ''}`}
-                  style={{
-                    background: isHome
-                      ? 'rgba(168,85,247,0.12)'
-                      : 'rgba(248,250,252,0.06)',
-                    border: isForfeited
-                      ? '1px solid rgba(239,68,68,0.3)'
-                      : isHome
-                        ? '1px solid rgba(168,85,247,0.35)'
-                        : '1px solid rgba(248,250,252,0.18)',
-                  }}
-                >
-                  <div className="text-xs mb-1" style={{ color: isHome ? 'rgba(192,132,252,0.7)' : 'rgba(148,163,184,0.6)', fontFamily: "'JetBrains Mono', monospace" }}>
-                    {dateLabel[g.number] || `Week ${g.number}`}
-                  </div>
-                  <div className="text-sm font-semibold mb-1" style={{ color: isHome ? '#c084fc' : '#f1f5f9' }}>{g.label}</div>
-                  <div className="text-xs uppercase tracking-widest mb-2" style={{ color: isHome ? 'rgba(192,132,252,0.55)' : 'rgba(241,245,249,0.4)', fontFamily: "'JetBrains Mono', monospace" }}>
-                    {isHome ? 'HOME' : 'AWAY'}
-                  </div>
-                  {isForfeited ? (
-                    <div className="text-red-400 text-sm font-semibold">FORFEITED</div>
-                  ) : (
-                    <div className="text-xs font-medium leading-tight" style={{ color: isHome ? '#d8b4fe' : '#e2e8f0' }}>
-                      vs. {g.opponent}
-                    </div>
-                  )}
+        <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-4">Prop Highlights</h2>
+        <div className="space-y-4">
+          {PROP_BETS.map(prop => (
+            <div key={prop}>
+              <p className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: '#64748b', fontFamily: "'JetBrains Mono', monospace" }}>{PROP_BET_LABELS[prop]}</p>
+              <div className="overflow-x-auto mobile-scroll -mx-4 px-4 md:mx-0 md:px-0">
+                <div className="flex md:grid md:grid-cols-3 gap-2 md:gap-3 min-w-max md:min-w-0">
+                  {GAMES.map(g => {
+                    const entry = weeklyPropResults.get(g.number)?.[prop]
+                    const winners = entry?.winners || []
+                    const blurb = entry?.blurb || ''
+                    return (
+                      <div key={g.number}
+                        className="rounded-xl p-3 w-44 md:w-auto flex-shrink-0 md:flex-shrink"
+                        style={{
+                          background: winners.length > 0 ? 'rgba(15,25,20,0.7)' : 'rgba(6,11,8,0.4)',
+                          border: winners.length > 0 ? '1px solid rgba(34,197,94,0.15)' : '1px solid rgba(255,255,255,0.05)',
+                        }}>
+                        <div className="text-xs mb-1.5" style={{ color: '#334155', fontFamily: "'JetBrains Mono', monospace" }}>{g.label}</div>
+                        {winners.length > 0 ? (
+                          <>
+                            <div className="flex flex-wrap gap-1 mb-1.5">
+                              {winners.map(w => {
+                                const color = PLAYER_HUES[w] || '#22c55e'
+                                const hasPhoto = PLAYERS_WITH_PHOTOS.has(w)
+                                return (
+                                  <div key={w} className="flex items-center gap-1">
+                                    <div className="w-5 h-5 rounded-full overflow-hidden shrink-0 flex items-center justify-center"
+                                      style={{ background: hasPhoto ? undefined : `${color}20`, border: `1.5px solid ${color}50` }}>
+                                      {hasPhoto
+                                        ? <img src={`/players/${w.toLowerCase()}.png`} alt={w} className="w-full h-full object-cover object-top" />
+                                        : <span style={{ color, fontSize: '0.5rem', fontFamily: "'Bebas Neue', sans-serif" }}>{w.charAt(0).toUpperCase()}</span>
+                                      }
+                                    </div>
+                                    <span className="text-xs font-semibold capitalize" style={{ color: PLAYER_HUES[w] || '#22c55e' }}>{w}</span>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                            {blurb && <p className="text-xs leading-snug" style={{ color: '#64748b' }}>{blurb}</p>}
+                          </>
+                        ) : (
+                          <div className="text-xs" style={{ color: '#1e293b' }}>TBD</div>
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
-              )
-            })}
-
-            {/* Playoff Week 1 — TBD */}
-            <div
-              className="rounded-xl p-3 md:p-4 text-center w-36 md:w-auto flex-shrink-0 md:flex-shrink"
-              style={{
-                background: 'rgba(245,158,11,0.08)',
-                border: '1px solid rgba(245,158,11,0.3)',
-              }}
-            >
-              <div className="text-xs mb-1" style={{ color: 'rgba(245,158,11,0.6)', fontFamily: "'JetBrains Mono', monospace" }}>
-                TBD
-              </div>
-              <div className="text-sm font-semibold mb-1" style={{ color: '#f59e0b' }}>Playoffs</div>
-              <div className="text-xs uppercase tracking-widest mb-2" style={{ color: 'rgba(245,158,11,0.5)', fontFamily: "'JetBrains Mono', monospace" }}>
-                Week 1
-              </div>
-              <div className="font-bold whitespace-nowrap" style={{ color: '#f59e0b', fontFamily: "'JetBrains Mono', monospace", fontSize: '0.55rem', letterSpacing: '0.05em' }}>
-                WE WILL BE MAKING THE PLAYOFFS
               </div>
             </div>
-          </div>
+          ))}
         </div>
       </div>
 

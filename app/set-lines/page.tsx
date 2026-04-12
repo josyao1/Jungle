@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback } from 'react'
-import { PLAYERS, STATS, STAT_LABELS, GAMES, getGamePhase, getPlayersForGame, sortWithInactiveAtBottom, Player, Stat } from '@/lib/constants'
+import { STATS, STAT_LABELS, GAMES, getGamePhase, getPlayersForGame, sortWithInactiveAtBottom, Player, Stat } from '@/lib/constants'
 import PlayerSelect from '@/components/PlayerSelect'
 import { supabase, getInactivePlayersForGame } from '@/lib/supabase'
 
@@ -18,15 +18,6 @@ export default function SetLinesPage() {
   const [gameNumber, setGameNumber] = useState<number>(1)
   const [inactivePlayers, setInactivePlayers] = useState<Map<string, string>>(new Map())
   const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    const initial: Record<string, Record<string, string>> = {}
-    PLAYERS.forEach(p => {
-      initial[p] = {}
-      STATS.forEach(s => { initial[p][s] = '' })
-    })
-    setPredictions(initial)
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadData = useCallback(async () => {
     const savedPlayer = localStorage.getItem('jungle_player') as Player | null
@@ -80,12 +71,17 @@ export default function SetLinesPage() {
       .select('*')
       .eq('game_id', games.id)
 
+    const gamePlayers = getPlayersForGame(currentGame.number)
+    const blank: Record<string, Record<string, string>> = {}
+    gamePlayers.forEach(p => { blank[p] = {}; STATS.forEach(s => { blank[p][s] = '' }) })
+    setPredictions(blank)
+
     if (existingPredictions) {
       const playerPredictions = existingPredictions.filter(p => p.submitter === savedPlayer)
       if (playerPredictions.length > 0) {
         setSubmitted(true)
         const loaded: Record<string, Record<string, string>> = {}
-        getPlayersForGame(currentGame.number).forEach(p => {
+        gamePlayers.forEach(p => {
           loaded[p] = {}
           STATS.forEach(s => {
             const pred = playerPredictions.find(pr => pr.player === p && pr.stat === s)

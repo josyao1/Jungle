@@ -2,7 +2,8 @@
  * constants.ts — Game configuration for the Jungle Softball Sportsbook.
  *
  * Defines:
- *  - PLAYERS / BETTORS: All 9 players (everyone bets on everyone)
+ *  - BETTORS: 12 core players who can place picks (everyone bets on everyone)
+ *  - PLAYERS: BETTORS + week-1-only guests (Alan, Reis)
  *  - STATS: Softball stat categories tracked per game
  *  - GAMES: 3-week season schedule (Sundays at 3pm CDT starting Apr 12, 2026)
  *  - Helper functions for game phase and current game detection
@@ -38,32 +39,27 @@ export type Player = typeof PLAYERS[number]
 export const WEEK1_ONLY_PLAYERS = new Set<string>(['Alan', 'Reis'])
 
 // Returns the players eligible for a given game number.
-export function getPlayersForGame(gameNumber: number): readonly string[] {
+// Week-1-only guests (Alan, Reis) are excluded from games 2+.
+export function getPlayersForGame(gameNumber: number): readonly Player[] {
   if (gameNumber === 1) return PLAYERS
   return PLAYERS.filter(p => !WEEK1_ONLY_PLAYERS.has(p))
 }
 
-// All players are on roster for all games (no IR system to start)
-export function isPlayerOnRoster(_player: Player, _gameNumber: number): boolean {
-  return true
+// Bettable hitting stats (drives pick/set-lines flow)
+export const STATS = ['hits', 'rbis', 'runs', 'errors', 'strikeouts'] as const
+export type Stat = typeof STATS[number]
+
+export const STAT_LABELS: Record<Stat, string> = {
+  hits: 'Hits',
+  rbis: 'RBIs',
+  runs: 'Runs',
+  errors: 'Errors',
+  strikeouts: 'Ks (throw)',
 }
 
-export function isPlayerInjured(_player: Player, _gameNumber?: number): boolean {
-  return false
-}
-
-export function getActivePlayersForGame(_gameNumber: number): readonly Player[] {
-  return PLAYERS
-}
-
-export function getRosterForGame(_gameNumber: number): readonly Player[] {
-  return PLAYERS
-}
-
-export const ACTIVE_PLAYERS = PLAYERS
-
-// Softball stats
-export const STATS = ['hits', 'rbis', 'totalbases', 'errors', 'strikeouts'] as const
+// Pitching stats — tracked in results but not bettable; ERA is derived from these
+export const PITCHING_STATS = ['ip', 'runs_allowed'] as const
+export type PitchingStat = typeof PITCHING_STATS[number]
 
 // Prop bets — one per game, no exact line scoring, just pick the player
 export const PROP_BETS = ['biggest_disaster', 'longest_hit'] as const
@@ -72,15 +68,6 @@ export type PropBet = typeof PROP_BETS[number]
 export const PROP_BET_LABELS: Record<PropBet, string> = {
   biggest_disaster: '🤦 Biggest Disaster Moment',
   longest_hit: '💥 Longest Hit',
-}
-export type Stat = typeof STATS[number]
-
-export const STAT_LABELS: Record<Stat, string> = {
-  hits: 'Hits',
-  rbis: 'RBIs',
-  totalbases: 'Total Bases',
-  errors: 'Errors',
-  strikeouts: 'Ks (throw)',
 }
 
 // Game dates - Sundays at 3pm CDT (UTC-5 = 20:00 UTC) starting April 12
@@ -92,6 +79,7 @@ export const GAMES = [
     lockTime: new Date('2026-04-12T20:00:00Z'),
     opponent: 'UV Catastrophe',
     home: true,
+    finalScore: '13-3',
   },
   {
     number: 2,

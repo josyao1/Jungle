@@ -53,6 +53,14 @@ export default function Home() {
                 <div className="font-medium leading-tight" style={{ color: isHome ? '#d8b4fe' : '#e2e8f0', fontSize: '0.6rem' }}>
                   vs. {g.opponent}
                 </div>
+                {'finalScore' in g && g.finalScore && (
+                  <div className="mt-1.5 rounded-lg px-2 py-0.5 inline-block"
+                    style={{ background: 'rgba(34,197,94,0.18)', border: '1px solid rgba(34,197,94,0.45)' }}>
+                    <span style={{ color: '#4ade80', fontFamily: "'Bebas Neue', sans-serif", fontSize: '0.85rem', letterSpacing: '0.08em' }}>
+                      W {g.finalScore}
+                    </span>
+                  </div>
+                )}
               </div>
             )
           })}

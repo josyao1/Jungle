@@ -12,13 +12,35 @@ export const dynamic = 'force-dynamic'
  *  - Score calculation
  */
 
-import { useState, useEffect, useCallback } from 'react'
-import { PLAYERS, STATS, STAT_LABELS, GAMES, PROP_BETS, PROP_BET_LABELS, getPlayersForGame, sortWithInactiveAtBottom } from '@/lib/constants'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { PLAYERS, BETTORS, STATS, STAT_LABELS, GAMES, PROP_BETS, PROP_BET_LABELS, getPlayersForGame, sortWithInactiveAtBottom } from '@/lib/constants'
 import { supabase, Result, Line, Pick, getInactivePlayersForGame } from '@/lib/supabase'
 import { calculateScores } from '@/lib/utils'
 
 // Stats tracked in results but not used for betting
-const ALL_RESULT_STATS = [...STATS, 'ab'] as const
+const ALL_RESULT_STATS = [...STATS, 'ab', 'ip', 'runs_allowed', 'homeruns'] as const
+
+// IP uses baseball notation: .1 = 1/3, .2 = 2/3
+// We store IP as thirds-of-an-inning (integer) in the DB
+function ipToThirds(ip: string): number {
+  const trimmed = ip.trim()
+  if (trimmed === '' || trimmed === '.') return NaN
+  const dotIdx = trimmed.indexOf('.')
+  if (dotIdx === -1) {
+    const n = parseInt(trimmed)
+    return isNaN(n) ? NaN : n * 3
+  }
+  const full = parseInt(trimmed.slice(0, dotIdx)) || 0
+  const frac = Math.min(parseInt(trimmed[dotIdx + 1] || '0'), 2)
+  return full * 3 + frac
+}
+
+function thirdsToIpDisplay(thirds: number): string {
+  if (thirds === 0) return '0'
+  const full = Math.floor(thirds / 3)
+  const rem = thirds % 3
+  return rem > 0 ? `${full}.${rem}` : `${full}`
+}
 
 interface GameData {
   id: string
@@ -47,12 +69,15 @@ export default function AdminPage() {
   // Results state
   const [results, setResults] = useState<Record<string, Record<string, string>>>({})
   const [propResults, setPropResults] = useState<Record<string, string[]>>({})
+  const [propBlurbs, setPropBlurbs] = useState<Record<string, string>>({})
   const [inactivePlayers, setInactivePlayers] = useState<Map<string, string>>(new Map())
   const [isForfeited, setIsForfeited] = useState(false)
   const [calculated, setCalculated] = useState(false)
   const [savingResults, setSavingResults] = useState(false)
   const [resultsLoading, setResultsLoading] = useState(false)
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
+  const debounceTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+  const autoSaveStatusTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const loadData = useCallback(async () => {
     const savedPlayer = localStorage.getItem('jungle_player')
@@ -139,7 +164,8 @@ export default function AdminPage() {
         loaded[p] = {}
         ALL_RESULT_STATS.forEach(s => {
           const r = existingResults.find(r => r.player === p && r.stat === s)
-          loaded[p][s] = r ? String(r.value) : ''
+          if (!r) { loaded[p][s] = ''; return }
+          loaded[p][s] = s === 'ip' ? thirdsToIpDisplay(r.value) : String(r.value)
         })
       })
       setResults(loaded)
@@ -147,10 +173,16 @@ export default function AdminPage() {
 
     if (existingPropResults) {
       const loaded: Record<string, string[]> = {}
+      const blurbs: Record<string, string> = {}
       existingPropResults.forEach((p: any) => {
-        loaded[p.prop_type] = p.winner.split(',').map((w: string) => w.trim())
+        if (p.prop_type.endsWith('_blurb')) {
+          blurbs[p.prop_type.replace('_blurb', '')] = p.winner
+        } else {
+          loaded[p.prop_type] = p.winner.split(',').map((w: string) => w.trim())
+        }
       })
       setPropResults(loaded)
+      setPropBlurbs(blurbs)
     }
 
     setCalculated(!!(scores && scores.length > 0))
@@ -219,43 +251,85 @@ export default function AdminPage() {
 
   const autoSaveResult = useCallback(async (targetPlayer: string, stat: string, value: string) => {
     const currentGameData = games.find(g => g.game_number === selectedGame)
-    if (!currentGameData) return
+    if (!currentGameData) { setAutoSaveStatus('idle'); return }
     setAutoSaveStatus('saving')
+
+    let error: { message: string } | null = null
     if (value === '' || value === undefined) {
-      await supabase.from('jungle_results')
+      const res = await supabase.from('jungle_results')
         .delete()
         .eq('game_id', currentGameData.id)
         .eq('player', targetPlayer)
         .eq('stat', stat)
+      error = res.error
     } else {
-      const numVal = parseInt(value)
-      if (!isNaN(numVal)) {
-        await supabase.from('jungle_results').upsert(
-          { game_id: currentGameData.id, player: targetPlayer, stat, value: numVal },
-          { onConflict: 'game_id,player,stat' }
-        )
-      }
+      const numVal = stat === 'ip' ? ipToThirds(value) : parseInt(value)
+      if (isNaN(numVal)) { setAutoSaveStatus('idle'); return }
+      const res = await supabase.from('jungle_results').upsert(
+        { game_id: currentGameData.id, player: targetPlayer, stat, value: numVal },
+        { onConflict: 'game_id,player,stat' }
+      )
+      error = res.error
     }
+
+    if (error) {
+      console.error('[autoSaveResult] failed:', error.message, { targetPlayer, stat })
+      alert(`Failed to save ${targetPlayer} ${stat}: ${error.message}`)
+      setAutoSaveStatus('idle')
+      return
+    }
+
+    if (autoSaveStatusTimer.current) clearTimeout(autoSaveStatusTimer.current)
     setAutoSaveStatus('saved')
-    setTimeout(() => setAutoSaveStatus('idle'), 1500)
+    autoSaveStatusTimer.current = setTimeout(() => setAutoSaveStatus('idle'), 1500)
   }, [games, selectedGame])
 
   const handleResultChange = (targetPlayer: string, stat: string, value: string) => {
     setResults(prev => ({ ...prev, [targetPlayer]: { ...prev[targetPlayer], [stat]: value } }))
-    autoSaveResult(targetPlayer, stat, value)
+    // Debounce per player+stat to avoid race conditions on rapid keystrokes
+    const key = `${targetPlayer}:${stat}`
+    const existing = debounceTimers.current.get(key)
+    if (existing) clearTimeout(existing)
+    const timer = setTimeout(() => {
+      debounceTimers.current.delete(key)
+      autoSaveResult(targetPlayer, stat, value)
+    }, 400)
+    debounceTimers.current.set(key, timer)
   }
 
   const autoSavePropResults = useCallback(async (propType: string, winners: string[]) => {
     const currentGameData = games.find(g => g.game_number === selectedGame)
     if (!currentGameData) return
+    let error: { message: string } | null = null
     if (winners.length === 0) {
-      await supabase.from('jungle_prop_results').delete().eq('game_id', currentGameData.id).eq('prop_type', propType)
+      const res = await supabase.from('jungle_prop_results').delete().eq('game_id', currentGameData.id).eq('prop_type', propType)
+      error = res.error
     } else {
-      await supabase.from('jungle_prop_results').upsert(
+      const res = await supabase.from('jungle_prop_results').upsert(
         { game_id: currentGameData.id, prop_type: propType, winner: winners.join(',') },
         { onConflict: 'game_id,prop_type' }
       )
+      error = res.error
     }
+    if (error) console.error('[autoSavePropResults] failed:', error.message, { propType })
+  }, [games, selectedGame])
+
+  const autoSaveBlurb = useCallback(async (propType: string, blurb: string) => {
+    const currentGameData = games.find(g => g.game_number === selectedGame)
+    if (!currentGameData) return
+    const blurbKey = `${propType}_blurb`
+    let error: { message: string } | null = null
+    if (blurb.trim() === '') {
+      const res = await supabase.from('jungle_prop_results').delete().eq('game_id', currentGameData.id).eq('prop_type', blurbKey)
+      error = res.error
+    } else {
+      const res = await supabase.from('jungle_prop_results').upsert(
+        { game_id: currentGameData.id, prop_type: blurbKey, winner: blurb },
+        { onConflict: 'game_id,prop_type' }
+      )
+      error = res.error
+    }
+    if (error) console.error('[autoSaveBlurb] failed:', error.message, { propType })
   }, [games, selectedGame])
 
   const handleCalculateScores = async (gameId: string) => {
@@ -264,7 +338,7 @@ export default function AdminPage() {
     if (isForfeited) {
       await supabase.from('jungle_scores').delete().eq('game_id', gameId)
       await supabase.from('jungle_scores').insert(
-        PLAYERS.map(p => ({ game_id: gameId, player: p, correct_picks: 0, missed_picks: 0, total_points: 0 }))
+        BETTORS.map(p => ({ game_id: gameId, player: p, correct_picks: 0, missed_picks: 0, total_points: 0 }))
       )
       setCalculated(true)
       setSavingResults(false)
@@ -427,7 +501,7 @@ export default function AdminPage() {
           <div className="glass-card rounded-2xl p-4 md:p-6">
             <h2 className="font-semibold text-slate-200 mb-1">Stat Results</h2>
             <p className="text-slate-500 text-sm mb-4">
-              Enter post-game stats. AB (at-bats) tracked for batting average only — not scored.
+              Enter post-game stats. AB for batting average, IP/RA for pitching — not scored.
               {isForfeited && <span className="ml-2 text-red-400">(Game forfeited)</span>}
               {calculated && <span className="ml-2 text-green-400">✓ Scores calculated</span>}
             </p>
@@ -442,6 +516,9 @@ export default function AdminPage() {
                       <th>Player</th>
                       {STATS.map(stat => <th key={stat} className="text-center">{STAT_LABELS[stat]}</th>)}
                       <th className="text-center" style={{ color: 'var(--amber-warm)', opacity: 0.7 }}>AB</th>
+                      <th className="text-center" style={{ color: 'rgba(129,140,248,0.7)' }}>IP</th>
+                      <th className="text-center" style={{ color: 'rgba(129,140,248,0.7)' }}>RA</th>
+                      <th className="text-center" style={{ color: 'rgba(234,179,8,0.8)' }}>HR</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -474,10 +551,87 @@ export default function AdminPage() {
                               />
                             )}
                           </td>
+                          <td className="text-center">
+                            {isInactive ? <span className="text-slate-700">—</span> : (
+                              <input type="text" inputMode="decimal" placeholder="—"
+                                value={results[targetPlayer]?.['ip'] ?? ''}
+                                onChange={(e) => handleResultChange(targetPlayer, 'ip', e.target.value)}
+                                className="w-12 md:w-14 px-1 md:px-2 py-2 glass-input rounded-lg text-center text-sm"
+                                style={{ borderColor: 'rgba(99,102,241,0.2)' }}
+                              />
+                            )}
+                          </td>
+                          <td className="text-center">
+                            {isInactive ? <span className="text-slate-700">—</span> : (
+                              <input type="number" min="0" placeholder="—"
+                                value={results[targetPlayer]?.['runs_allowed'] ?? ''}
+                                onChange={(e) => handleResultChange(targetPlayer, 'runs_allowed', e.target.value)}
+                                className="w-12 md:w-14 px-1 md:px-2 py-2 glass-input rounded-lg text-center text-sm"
+                                style={{ borderColor: 'rgba(99,102,241,0.2)' }}
+                              />
+                            )}
+                          </td>
+                          <td className="text-center">
+                            {isInactive ? <span className="text-slate-700">—</span> : (
+                              <input type="number" min="0" placeholder="—"
+                                value={results[targetPlayer]?.['homeruns'] ?? ''}
+                                onChange={(e) => handleResultChange(targetPlayer, 'homeruns', e.target.value)}
+                                className="w-12 md:w-14 px-1 md:px-2 py-2 glass-input rounded-lg text-center text-sm"
+                                style={{ borderColor: 'rgba(234,179,8,0.2)' }}
+                              />
+                            )}
+                          </td>
                         </tr>
                       )
                     })}
                   </tbody>
+                  <tfoot>
+                    <tr style={{ borderTop: '2px solid rgba(255,255,255,0.08)' }}>
+                      <td className="py-2 px-2 text-xs font-bold uppercase tracking-widest" style={{ color: '#475569' }}>Total</td>
+                      {STATS.map(stat => {
+                        const total = getPlayersForGame(selectedGame)
+                          .filter(p => !inactivePlayers.has(p))
+                          .reduce((sum, p) => sum + (parseInt(results[p]?.[stat] || '0') || 0), 0)
+                        return (
+                          <td key={stat} className="text-center py-2 text-sm font-bold" style={{ color: '#e2e8f0' }}>
+                            {total > 0 ? total : <span style={{ color: '#334155' }}>0</span>}
+                          </td>
+                        )
+                      })}
+                      <td className="text-center py-2 text-sm font-bold" style={{ color: 'var(--amber-warm)' }}>
+                        {(() => {
+                          const t = getPlayersForGame(selectedGame).filter(p => !inactivePlayers.has(p))
+                            .reduce((sum, p) => sum + (parseInt(results[p]?.['ab'] || '0') || 0), 0)
+                          return t > 0 ? t : <span style={{ color: '#334155' }}>0</span>
+                        })()}
+                      </td>
+                      <td className="text-center py-2 text-sm font-bold" style={{ color: 'rgba(129,140,248,0.9)' }}>
+                        {(() => {
+                          const thirds = getPlayersForGame(selectedGame).filter(p => !inactivePlayers.has(p))
+                            .reduce((sum, p) => {
+                              const v = results[p]?.['ip'] || ''
+                              const t = v ? ipToThirds(v) : NaN
+                              return sum + (isNaN(t) ? 0 : t)
+                            }, 0)
+                          return thirds > 0 ? thirdsToIpDisplay(thirds) : <span style={{ color: '#334155' }}>0</span>
+                        })()}
+                      </td>
+                      <td className="text-center py-2 text-sm font-bold" style={{ color: 'rgba(129,140,248,0.9)' }}>
+                        {(() => {
+                          const t = getPlayersForGame(selectedGame).filter(p => !inactivePlayers.has(p))
+                            .reduce((sum, p) => sum + (parseInt(results[p]?.['runs_allowed'] || '0') || 0), 0)
+                          return t > 0 ? t : <span style={{ color: '#334155' }}>0</span>
+                        })()}
+                      </td>
+                      <td className="text-center py-2 text-sm font-bold" style={{ color: 'rgba(234,179,8,0.9)' }}>
+                        {(() => {
+                          const t = getPlayersForGame(selectedGame).filter(p => !inactivePlayers.has(p))
+                            .reduce((sum, p) => sum + (parseInt(results[p]?.['homeruns'] || '0') || 0), 0)
+                          return t > 0 ? t : <span style={{ color: '#334155' }}>0</span>
+                        })()}
+                      </td>
+                    </tr>
+                  </tfoot>
                 </table>
               </div>
             )}
@@ -486,17 +640,17 @@ export default function AdminPage() {
             <div className="mt-6 space-y-5">
               <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wide">Prop Results</h3>
               {PROP_BETS.map(prop => (
-                <div key={prop}>
-                  <p className="text-sm text-slate-300 mb-3 font-medium">{PROP_BET_LABELS[prop]}</p>
+                <div key={prop} className="space-y-2">
+                  <p className="text-sm text-slate-300 font-medium">{PROP_BET_LABELS[prop]}</p>
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                     {getPlayersForGame(selectedGame).filter(p => !inactivePlayers.has(p)).map(p => (
                       <button key={p}
-                        onClick={() => setPropResults(prev => {
-                          const current = prev[prop] || []
+                        onClick={() => {
+                          const current = propResults[prop] || []
                           const updated = current.includes(p) ? current.filter(w => w !== p) : [...current, p]
+                          setPropResults(prev => ({ ...prev, [prop]: updated }))
                           autoSavePropResults(prop, updated)
-                          return { ...prev, [prop]: updated }
-                        })}
+                        }}
                         className={`px-2 py-2.5 rounded-lg text-xs capitalize font-medium transition-all ${
                           propResults[prop]?.includes(p)
                             ? 'bg-emerald-500/20 border-2 border-emerald-500 text-emerald-400'
@@ -506,6 +660,17 @@ export default function AdminPage() {
                       </button>
                     ))}
                   </div>
+                  <textarea
+                    rows={2}
+                    placeholder="What happened? (optional)"
+                    value={propBlurbs[prop] || ''}
+                    onChange={(e) => {
+                      const val = e.target.value
+                      setPropBlurbs(prev => ({ ...prev, [prop]: val }))
+                      autoSaveBlurb(prop, val)
+                    }}
+                    className="w-full glass-input rounded-xl px-3 py-2 text-sm resize-none text-slate-300 placeholder:text-slate-600"
+                  />
                 </div>
               ))}
             </div>
