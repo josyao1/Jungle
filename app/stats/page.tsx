@@ -106,6 +106,13 @@ export default function StatsPage() {
       activeByGame.set(gameNum, PLAYERS.filter(p => !inactiveMap.has(p)))
     })
 
+    // Track which game numbers have results entered (only these count toward GP)
+    const gamesWithResults = new Set<number>()
+    results.forEach(r => {
+      const gameNum = gameMap.get(r.game_id)
+      if (gameNum) gamesWithResults.add(gameNum)
+    })
+
     // Build highlights map (game_number -> highlight)
     const highlightMap = new Map<number, WeeklyHighlight>()
     highlights?.forEach((h: any) => {
@@ -142,9 +149,9 @@ export default function StatsPage() {
       const totalAb = abResults.reduce((sum, r) => sum + (r.value || 0), 0)
       const totalHits = statsObj['hits']?.total ?? 0
 
-      // GP = number of non-forfeited games where this player was active
+      // GP = number of non-forfeited games where this player was active AND results have been entered
       const gamesPlayed = Array.from(activeByGame.entries())
-        .filter(([gameNum, activePlayers]) => !forfeited.has(gameNum) && activePlayers.includes(player))
+        .filter(([gameNum, activePlayers]) => !forfeited.has(gameNum) && activePlayers.includes(player) && gamesWithResults.has(gameNum))
         .length
 
       return { player, stats: statsObj as Record<Stat, { total: number; games: number; perGame: number }>, totalHits, totalAb, gamesPlayed }
