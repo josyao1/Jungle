@@ -17,6 +17,7 @@ export const PLAYER_HUES: Record<string, string> = {
   joshua: '#22c55e', ronit: '#f59e0b', aarnav: '#06b6d4', evan: '#a855f7',
   andrew: '#f97316', rohit: '#ec4899', teja: '#10b981', aiyan: '#3b82f6',
   salil: '#eab308', Jay: '#8b5cf6', Tommy: '#84cc16', Neo: '#d946ef',
+  Alan: '#64748b', Reis: '#f43f5e',
 }
 
 // Players with a photo at /public/players/{name.toLowerCase()}.png
@@ -25,12 +26,22 @@ export const PLAYERS_WITH_PHOTOS = new Set<string>([
   'joshua', 'ronit', 'aarnav', 'evan', 'andrew', 'rohit', 'teja', 'aiyan', 'salil', 'Jay', 'Tommy', 'Neo',
 ])
 
-// All players (also the bettors - everyone in the group)
+// Bettors — the core group who can place picks (does NOT include week-1-only guests)
 export const BETTORS = ['joshua', 'ronit', 'aarnav', 'evan', 'andrew', 'rohit', 'teja', 'aiyan', 'salil', 'Jay', 'Tommy', 'Neo'] as const
 export type Bettor = typeof BETTORS[number]
 
-export const PLAYERS = ['joshua', 'ronit', 'aarnav', 'evan', 'andrew', 'rohit', 'teja', 'aiyan', 'salil', 'Jay', 'Tommy', 'Neo'] as const
+// All players including week-1-only guests (Alan, Reis)
+export const PLAYERS = ['joshua', 'ronit', 'aarnav', 'evan', 'andrew', 'rohit', 'teja', 'aiyan', 'salil', 'Jay', 'Tommy', 'Neo', 'Alan', 'Reis'] as const
 export type Player = typeof PLAYERS[number]
+
+// Players who only appear in game 1 (no betting profile, stats week 1 only)
+export const WEEK1_ONLY_PLAYERS = new Set<string>(['Alan', 'Reis'])
+
+// Returns the players eligible for a given game number.
+export function getPlayersForGame(gameNumber: number): readonly string[] {
+  if (gameNumber === 1) return PLAYERS
+  return PLAYERS.filter(p => !WEEK1_ONLY_PLAYERS.has(p))
+}
 
 // All players are on roster for all games (no IR system to start)
 export function isPlayerOnRoster(_player: Player, _gameNumber: number): boolean {

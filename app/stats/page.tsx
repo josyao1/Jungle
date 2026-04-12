@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic'
  */
 
 import { useState, useEffect, useCallback } from 'react'
-import { PLAYERS, STATS, STAT_LABELS, GAMES, sortWithInactiveAtBottom, Stat, PLAYER_HUES, PLAYERS_WITH_PHOTOS } from '@/lib/constants'
+import { PLAYERS, STATS, STAT_LABELS, GAMES, getPlayersForGame, WEEK1_ONLY_PLAYERS, sortWithInactiveAtBottom, Stat, PLAYER_HUES, PLAYERS_WITH_PHOTOS } from '@/lib/constants'
 import { supabase } from '@/lib/supabase'
 
 interface PlayerStats {
@@ -18,6 +18,7 @@ interface PlayerStats {
   stats: Record<Stat, { total: number; games: number; perGame: number }>
   totalHits: number
   totalAb: number
+  gamesPlayed: number
 }
 
 interface WeeklyHighlight {
@@ -43,6 +44,8 @@ const ATHLETE_NAMES: Record<string, string> = {
   teja:   'A. Siluveru',
   Neo:    'N. Trovela-Villamiel',
   Tommy:  'T. Matthys',
+  Alan:   'Alan',
+  Reis:   'Reis',
 }
 
 function formatBA(hits: number, ab: number): string {
@@ -139,18 +142,24 @@ export default function StatsPage() {
       const totalAb = abResults.reduce((sum, r) => sum + (r.value || 0), 0)
       const totalHits = statsObj['hits']?.total ?? 0
 
-      return { player, stats: statsObj as Record<Stat, { total: number; games: number; perGame: number }>, totalHits, totalAb }
+      // GP = number of non-forfeited games where this player was active
+      const gamesPlayed = Array.from(activeByGame.entries())
+        .filter(([gameNum, activePlayers]) => !forfeited.has(gameNum) && activePlayers.includes(player))
+        .length
+
+      return { player, stats: statsObj as Record<Stat, { total: number; games: number; perGame: number }>, totalHits, totalAb, gamesPlayed }
     })
 
     setPlayerStats(aggregated)
 
-    // Per-week stats — include ALL players (inactive shown at bottom with blank stats)
+    // Per-week stats — include only eligible players per game (Alan/Reis week 1 only)
     const weeklyMap = new Map<number, PlayerStats[]>()
     GAMES.forEach(g => {
       const gameId = gameIdMap.get(g.number)
       const inactiveSet = inactiveByGame.get(g.number) || new Map<string, string>()
+      const gamePlayers = getPlayersForGame(g.number)
 
-      const weekStats: PlayerStats[] = PLAYERS.map(player => {
+      const weekStats: PlayerStats[] = gamePlayers.map(player => {
         const statsObj: Record<string, { total: number; games: number; perGame: number }> = {}
         const isInactive = inactiveSet.has(player)
 
@@ -172,7 +181,7 @@ export default function StatsPage() {
           : 0
         const weekHits = statsObj['hits']?.total ?? 0
 
-        return { player, stats: statsObj as Record<Stat, { total: number; games: number; perGame: number }>, totalHits: weekHits, totalAb: weekAb }
+        return { player, stats: statsObj as Record<Stat, { total: number; games: number; perGame: number }>, totalHits: weekHits, totalAb: weekAb, gamesPlayed: isInactive ? 0 : 1 }
       })
 
       weeklyMap.set(g.number, weekStats)
@@ -214,7 +223,12 @@ export default function StatsPage() {
     }
     return sortDirection === 'asc' ? comparison : -comparison
   }).sort((a, b) => {
-    // Inactive players always sink to bottom regardless of sort column
+    // Guest (week-1-only) players always sink below the regular roster
+    const aGuest = WEEK1_ONLY_PLAYERS.has(a.player) ? 1 : 0
+    const bGuest = WEEK1_ONLY_PLAYERS.has(b.player) ? 1 : 0
+    return aGuest - bGuest
+  }).sort((a, b) => {
+    // Inactive players always sink to very bottom regardless of sort column
     const aOut = currentInactive.has(a.player) ? 1 : 0
     const bOut = currentInactive.has(b.player) ? 1 : 0
     return aOut - bOut
@@ -284,7 +298,7 @@ export default function StatsPage() {
 
         {/* Player card rows */}
         <div className="space-y-1.5">
-          {sortedStats.map(({ player, stats, totalHits, totalAb }) => {
+          {sortedStats.map(({ player, stats, totalHits, totalAb, gamesPlayed }) => {
             const isInactiveThisWeek = selectedWeek !== 'all' && (weeklyInactive.get(selectedWeek as number)?.has(player) ?? false)
             const color = PLAYER_HUES[player] || '#22c55e'
             const hasPhoto = PLAYERS_WITH_PHOTOS.has(player)
@@ -310,7 +324,12 @@ export default function StatsPage() {
                     }
                   </div>
                   <div className="min-w-0">
-                    <span className="text-sm font-semibold text-slate-200 truncate block">{ATHLETE_NAMES[player] ?? player}</span>
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-sm font-semibold text-slate-200 truncate">{ATHLETE_NAMES[player] ?? player}</span>
+                      {!isInactiveThisWeek && gamesPlayed > 0 && (
+                        <span className="text-xs shrink-0" style={{ color: '#334155', fontFamily: "'JetBrains Mono', monospace" }}>({gamesPlayed}GP)</span>
+                      )}
+                    </div>
                     {isInactiveThisWeek && (
                       <span className="badge badge-out">{weeklyInactive.get(selectedWeek as number)?.get(player) || 'OUT'}</span>
                     )}
@@ -435,11 +454,7 @@ export default function StatsPage() {
               const h = weeklyHighlights.get(g.number)
               const mvp = h?.mvp_player
               const hasPhoto = mvp && PLAYERS_WITH_PHOTOS.has(mvp)
-              const mvpColor = mvp ? ({
-                joshua:'#22c55e', ronit:'#f59e0b', aarnav:'#06b6d4', evan:'#a855f7',
-                andrew:'#f97316', rohit:'#ec4899', teja:'#10b981', aiyan:'#3b82f6',
-                salil:'#eab308', Jay:'#8b5cf6', Tommy:'#84cc16', Neo:'#d946ef',
-              } as Record<string,string>)[mvp] || '#22c55e' : '#22c55e'
+              const mvpColor = mvp ? (PLAYER_HUES[mvp] || '#22c55e') : '#22c55e'
 
               return (
                 <div

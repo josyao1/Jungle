@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic'
  */
 
 import { useState, useEffect, useCallback } from 'react'
-import { PLAYERS, STATS, STAT_LABELS, GAMES, PROP_BETS, PROP_BET_LABELS, sortWithInactiveAtBottom } from '@/lib/constants'
+import { PLAYERS, STATS, STAT_LABELS, GAMES, PROP_BETS, PROP_BET_LABELS, getPlayersForGame, sortWithInactiveAtBottom } from '@/lib/constants'
 import { supabase, Result, Line, Pick, getInactivePlayersForGame } from '@/lib/supabase'
 import { calculateScores } from '@/lib/utils'
 
@@ -52,6 +52,7 @@ export default function AdminPage() {
   const [calculated, setCalculated] = useState(false)
   const [savingResults, setSavingResults] = useState(false)
   const [resultsLoading, setResultsLoading] = useState(false)
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
 
   const loadData = useCallback(async () => {
     const savedPlayer = localStorage.getItem('jungle_player')
@@ -108,13 +109,15 @@ export default function AdminPage() {
   }, [])
 
   // Load results whenever the selected game changes
-  const loadResults = useCallback(async (gameId: string, forfeited: boolean) => {
+  const loadResults = useCallback(async (gameId: string, forfeited: boolean, gameNumber: number) => {
     setResultsLoading(true)
     setIsForfeited(forfeited)
 
+    const gamePlayers = getPlayersForGame(gameNumber)
+
     // Reset state
     const blank: Record<string, Record<string, string>> = {}
-    PLAYERS.forEach(p => {
+    gamePlayers.forEach(p => {
       blank[p] = {}
       ALL_RESULT_STATS.forEach(s => { blank[p][s] = '' })
     })
@@ -132,7 +135,7 @@ export default function AdminPage() {
 
     if (existingResults && existingResults.length > 0) {
       const loaded: Record<string, Record<string, string>> = {}
-      PLAYERS.forEach(p => {
+      gamePlayers.forEach(p => {
         loaded[p] = {}
         ALL_RESULT_STATS.forEach(s => {
           const r = existingResults.find(r => r.player === p && r.stat === s)
@@ -159,7 +162,7 @@ export default function AdminPage() {
   // Reload results when selected game or games list changes
   useEffect(() => {
     const currentGame = games.find(g => g.game_number === selectedGame)
-    if (currentGame) loadResults(currentGame.id, currentGame.forfeited)
+    if (currentGame) loadResults(currentGame.id, currentGame.forfeited, currentGame.game_number)
   }, [selectedGame, games, loadResults])
 
   const togglePlayerAvailability = async (gameId: string, player: string) => {
@@ -214,50 +217,46 @@ export default function AdminPage() {
     }))
   }
 
-  const handleResultChange = (targetPlayer: string, stat: string, value: string) => {
-    setResults(prev => ({ ...prev, [targetPlayer]: { ...prev[targetPlayer], [stat]: value } }))
-  }
-
-  const handleSubmitResults = async (gameId: string) => {
-    setSavingResults(true)
-
-    const { error: deleteError } = await supabase.from('jungle_results').delete().eq('game_id', gameId)
-    if (deleteError) {
-      alert('Failed to clear old results. No changes made.')
-      setSavingResults(false)
-      return
-    }
-
-    const toInsert: Array<{ game_id: string; player: string; stat: string; value: number }> = []
-    PLAYERS.forEach(p => {
-      if (inactivePlayers.has(p)) return
-      ALL_RESULT_STATS.forEach(s => {
-        const val = results[p]?.[s]
-        if (val !== '' && val !== undefined) {
-          toInsert.push({ game_id: gameId, player: p, stat: s, value: parseInt(val) })
-        }
-      })
-    })
-    if (toInsert.length > 0) {
-      const { error: insertError } = await supabase.from('jungle_results').insert(toInsert)
-      if (insertError) {
-        alert('Failed to save results: ' + insertError.message)
-        setSavingResults(false)
-        return
+  const autoSaveResult = useCallback(async (targetPlayer: string, stat: string, value: string) => {
+    const currentGameData = games.find(g => g.game_number === selectedGame)
+    if (!currentGameData) return
+    setAutoSaveStatus('saving')
+    if (value === '' || value === undefined) {
+      await supabase.from('jungle_results')
+        .delete()
+        .eq('game_id', currentGameData.id)
+        .eq('player', targetPlayer)
+        .eq('stat', stat)
+    } else {
+      const numVal = parseInt(value)
+      if (!isNaN(numVal)) {
+        await supabase.from('jungle_results').upsert(
+          { game_id: currentGameData.id, player: targetPlayer, stat, value: numVal },
+          { onConflict: 'game_id,player,stat' }
+        )
       }
     }
+    setAutoSaveStatus('saved')
+    setTimeout(() => setAutoSaveStatus('idle'), 1500)
+  }, [games, selectedGame])
 
-    const propToInsert = Object.entries(propResults)
-      .filter(([, winners]) => winners && winners.length > 0)
-      .map(([propType, winners]) => ({ game_id: gameId, prop_type: propType, winner: winners.join(',') }))
-    if (propToInsert.length > 0) {
-      const { error: propError } = await supabase.from('jungle_prop_results').upsert(propToInsert, { onConflict: 'game_id,prop_type' })
-      if (propError) console.error('[handleSubmitResults] prop upsert failed:', propError.message)
-    }
-
-    setSavingResults(false)
-    alert('Results saved!')
+  const handleResultChange = (targetPlayer: string, stat: string, value: string) => {
+    setResults(prev => ({ ...prev, [targetPlayer]: { ...prev[targetPlayer], [stat]: value } }))
+    autoSaveResult(targetPlayer, stat, value)
   }
+
+  const autoSavePropResults = useCallback(async (propType: string, winners: string[]) => {
+    const currentGameData = games.find(g => g.game_number === selectedGame)
+    if (!currentGameData) return
+    if (winners.length === 0) {
+      await supabase.from('jungle_prop_results').delete().eq('game_id', currentGameData.id).eq('prop_type', propType)
+    } else {
+      await supabase.from('jungle_prop_results').upsert(
+        { game_id: currentGameData.id, prop_type: propType, winner: winners.join(',') },
+        { onConflict: 'game_id,prop_type' }
+      )
+    }
+  }, [games, selectedGame])
 
   const handleCalculateScores = async (gameId: string) => {
     setSavingResults(true)
@@ -392,7 +391,7 @@ export default function AdminPage() {
             <h2 className="font-semibold text-slate-200 mb-1">Player Availability</h2>
             <p className="text-slate-500 text-sm mb-5">Toggle players inactive if they're sitting out this week.</p>
             <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-              {PLAYERS.map(player => {
+              {getPlayersForGame(selectedGame).map(player => {
                 const entry = availability[currentGame.id]?.[player] ?? { active: true, reason: 'OUT' }
                 const isActive = entry.active
                 return (
@@ -446,7 +445,7 @@ export default function AdminPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {sortWithInactiveAtBottom(PLAYERS, inactivePlayers).map(targetPlayer => {
+                    {sortWithInactiveAtBottom(getPlayersForGame(selectedGame), inactivePlayers).map(targetPlayer => {
                       const isInactive = inactivePlayers.has(targetPlayer)
                       return (
                         <tr key={targetPlayer} className={isInactive ? 'player-inactive' : ''}>
@@ -490,11 +489,12 @@ export default function AdminPage() {
                 <div key={prop}>
                   <p className="text-sm text-slate-300 mb-3 font-medium">{PROP_BET_LABELS[prop]}</p>
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                    {PLAYERS.filter(p => !inactivePlayers.has(p)).map(p => (
+                    {getPlayersForGame(selectedGame).filter(p => !inactivePlayers.has(p)).map(p => (
                       <button key={p}
                         onClick={() => setPropResults(prev => {
                           const current = prev[prop] || []
                           const updated = current.includes(p) ? current.filter(w => w !== p) : [...current, p]
+                          autoSavePropResults(prop, updated)
                           return { ...prev, [prop]: updated }
                         })}
                         className={`px-2 py-2.5 rounded-lg text-xs capitalize font-medium transition-all ${
@@ -510,14 +510,14 @@ export default function AdminPage() {
               ))}
             </div>
 
-            {/* Save + Calculate buttons */}
-            <div className="flex gap-3 mt-6">
-              <button onClick={() => handleSubmitResults(currentGame.id)} disabled={savingResults}
-                className="flex-1 btn-secondary py-3 rounded-xl text-sm font-medium disabled:opacity-50">
-                {savingResults ? 'Saving...' : 'Save Results'}
-              </button>
+            {/* Calculate button + autosave indicator */}
+            <div className="flex items-center gap-3 mt-6">
+              <span className="text-xs transition-all"
+                style={{ color: autoSaveStatus === 'saving' ? '#64748b' : '#22c55e', opacity: autoSaveStatus === 'idle' ? 0 : 1 }}>
+                {autoSaveStatus === 'saving' ? 'Saving...' : '✓ Saved'}
+              </span>
               <button onClick={() => handleCalculateScores(currentGame.id)} disabled={savingResults}
-                className="flex-1 btn-accent py-3 rounded-xl text-sm font-semibold disabled:opacity-50">
+                className="ml-auto btn-accent px-6 py-3 rounded-xl text-sm font-semibold disabled:opacity-50">
                 {savingResults ? 'Working...' : calculated ? 'Recalculate Scores' : 'Calculate Scores'}
               </button>
             </div>
@@ -539,7 +539,7 @@ export default function AdminPage() {
                   onChange={(e) => updateHighlight(currentGame.id, 'mvp_player', e.target.value)}
                   className="w-full glass-input rounded-xl px-3 py-2.5 text-sm capitalize">
                   <option value="">— No MVP —</option>
-                  {PLAYERS.map(p => (
+                  {getPlayersForGame(selectedGame).map(p => (
                     <option key={p} value={p} className="bg-gray-900 capitalize">{p}</option>
                   ))}
                 </select>

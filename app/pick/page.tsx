@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic'
  */
 
 import { useState, useEffect, useCallback } from 'react'
-import { PLAYERS, STATS, STAT_LABELS, GAMES, PROP_BETS, PROP_BET_LABELS, getGamePhase, sortWithInactiveAtBottom, Player, Stat, PLAYER_HUES, PLAYERS_WITH_PHOTOS } from '@/lib/constants'
+import { STATS, STAT_LABELS, GAMES, PROP_BETS, PROP_BET_LABELS, getGamePhase, getPlayersForGame, sortWithInactiveAtBottom, Player, Stat, PLAYER_HUES, PLAYERS_WITH_PHOTOS } from '@/lib/constants'
 import PlayerSelect from '@/components/PlayerSelect'
 import { supabase, Line, Pick, getInactivePlayersForGame } from '@/lib/supabase'
 import { calculateAveragedLine } from '@/lib/utils'
@@ -83,7 +83,7 @@ export default function PickPage() {
 
     const inactive = await getInactivePlayersForGame(games.id)
     setInactivePlayers(inactive)
-    const active = PLAYERS.filter(p => !inactive.has(p))
+    const active = getPlayersForGame(gameToLoad.number).filter(p => !inactive.has(p))
 
     await calculateAndSaveLines(games.id, active)
     const { data: liveLines } = await supabase
@@ -130,8 +130,9 @@ export default function PickPage() {
       .eq('game_id', games.id)
       .eq('picker', savedPlayer)
 
+    const gamePlayers = getPlayersForGame(gameToLoad.number)
     const picksMap: Record<string, Record<string, boolean>> = {}
-    PLAYERS.forEach(p => {
+    gamePlayers.forEach(p => {
       picksMap[p] = {}
       STATS.forEach(s => {
         const pick = existingPicks?.find(pk => pk.player === p && pk.stat === s)
@@ -144,7 +145,7 @@ export default function PickPage() {
     const newAutoPicked: Array<{ player: string; stat: string }> = []
 
     if (!autoPickOff && currentPhase !== 'locked' && userPreds && liveLines) {
-      PLAYERS.filter(p => !inactive.has(p)).forEach(p => {
+      gamePlayers.filter(p => !inactive.has(p)).forEach(p => {
         STATS.forEach(s => {
           if (picksMap[p][s]) return
           const userPred = userPreds.find((pred: any) => pred.player === p && pred.stat === s)
@@ -207,7 +208,7 @@ export default function PickPage() {
   const autoSave = useCallback(async (newPicks: Record<string, Record<string, boolean>>) => {
     if (!player || !gameId) return
     setSaveStatus('saving')
-    const picksToInsert = PLAYERS.filter(p => !inactivePlayers.has(p)).flatMap(p =>
+    const picksToInsert = getPlayersForGame(selectedWeek).filter(p => !inactivePlayers.has(p)).flatMap(p =>
       STATS.map(s => ({
         game_id: gameId,
         picker: player,
@@ -225,7 +226,7 @@ export default function PickPage() {
     }
     setSaveStatus('saved')
     setTimeout(() => setSaveStatus('idle'), 1500)
-  }, [player, gameId, inactivePlayers, phase])
+  }, [player, gameId, inactivePlayers, phase, selectedWeek])
 
   const togglePick = (targetPlayer: string, stat: string) => {
     setPicks(prev => {
@@ -435,7 +436,7 @@ export default function PickPage() {
                     className="disabled:opacity-50"
                   >
                     <option value="" disabled style={{ background: '#0d1f16', color: '#64748b' }}>Pick one</option>
-                    {PLAYERS.filter(p => !inactivePlayers.has(p)).map(p => (
+                    {getPlayersForGame(selectedWeek).filter(p => !inactivePlayers.has(p)).map(p => (
                       <option key={p} value={p} style={{ background: '#0d1f16', color: '#e2e8f0' }} className="capitalize">
                         {p.charAt(0).toUpperCase() + p.slice(1)}
                       </option>
@@ -483,7 +484,7 @@ export default function PickPage() {
 
             {/* Player card rows */}
             <div className="space-y-1.5">
-          {sortWithInactiveAtBottom(PLAYERS, inactivePlayers).map(targetPlayer => {
+          {sortWithInactiveAtBottom(getPlayersForGame(selectedWeek), inactivePlayers).map(targetPlayer => {
             const isInactive = inactivePlayers.has(targetPlayer)
             const color = PLAYER_HUES[targetPlayer] || '#22c55e'
             const hasPhoto = PLAYERS_WITH_PHOTOS.has(targetPlayer)

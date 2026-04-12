@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback } from 'react'
-import { PLAYERS, STATS, STAT_LABELS, GAMES, getGamePhase, sortWithInactiveAtBottom, Player, Stat } from '@/lib/constants'
+import { PLAYERS, STATS, STAT_LABELS, GAMES, getGamePhase, getPlayersForGame, sortWithInactiveAtBottom, Player, Stat } from '@/lib/constants'
 import PlayerSelect from '@/components/PlayerSelect'
 import { supabase, getInactivePlayersForGame } from '@/lib/supabase'
 
@@ -26,7 +26,7 @@ export default function SetLinesPage() {
       STATS.forEach(s => { initial[p][s] = '' })
     })
     setPredictions(initial)
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadData = useCallback(async () => {
     const savedPlayer = localStorage.getItem('jungle_player') as Player | null
@@ -85,7 +85,7 @@ export default function SetLinesPage() {
       if (playerPredictions.length > 0) {
         setSubmitted(true)
         const loaded: Record<string, Record<string, string>> = {}
-        PLAYERS.forEach(p => {
+        getPlayersForGame(currentGame.number).forEach(p => {
           loaded[p] = {}
           STATS.forEach(s => {
             const pred = playerPredictions.find(pr => pr.player === p && pr.stat === s)
@@ -118,7 +118,7 @@ export default function SetLinesPage() {
 
     const toInsert: Array<{ game_id: string; submitter: string; player: string; stat: string; value: number }> = []
 
-    PLAYERS.forEach(p => {
+    getPlayersForGame(gameNumber).forEach(p => {
       if (inactivePlayers.has(p)) return
       STATS.forEach(s => {
         const val = predictions[p]?.[s]
@@ -212,7 +212,7 @@ export default function SetLinesPage() {
               </tr>
             </thead>
             <tbody>
-              {sortWithInactiveAtBottom(PLAYERS, inactivePlayers).map(targetPlayer => {
+              {sortWithInactiveAtBottom(getPlayersForGame(gameNumber), inactivePlayers).map(targetPlayer => {
                 const isInactive = inactivePlayers.has(targetPlayer)
                 return (
                   <tr key={targetPlayer} className={isInactive ? 'player-inactive' : ''}>
@@ -251,7 +251,7 @@ export default function SetLinesPage() {
           <button
             onClick={() => {
               const cleared: Record<string, Record<string, string>> = {}
-              PLAYERS.forEach(p => {
+              getPlayersForGame(gameNumber).forEach(p => {
                 cleared[p] = {}
                 STATS.forEach(s => { cleared[p][s] = '' })
               })
