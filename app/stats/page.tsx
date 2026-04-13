@@ -11,6 +11,7 @@ export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback } from 'react'
 import { PLAYERS, STATS, STAT_LABELS, GAMES, getPlayersForGame, WEEK1_ONLY_PLAYERS, Stat, PLAYER_HUES, PLAYERS_WITH_PHOTOS, PROP_BET_LABELS, PROP_BETS } from '@/lib/constants'
+import PlayerAvatar from '@/components/PlayerAvatar'
 import { supabase } from '@/lib/supabase'
 
 interface PlayerStats {
@@ -402,7 +403,6 @@ export default function StatsPage() {
             {sortedStats.map(({ player, stats, totalHits, totalAb, totalHomeruns, gamesPlayed }) => {
               const isInactiveThisWeek = selectedWeek !== 'all' && (weeklyInactive.get(selectedWeek as number)?.has(player) ?? false)
               const color = PLAYER_HUES[player] || '#22c55e'
-              const hasPhoto = PLAYERS_WITH_PHOTOS.has(player)
 
               return (
                 <div key={player}
@@ -415,13 +415,7 @@ export default function StatsPage() {
                     opacity: isInactiveThisWeek ? 0.55 : 1,
                   }}>
                   <div className="flex items-center gap-2 min-w-0">
-                    <div className="w-7 h-7 rounded-full shrink-0 overflow-hidden flex items-center justify-center"
-                      style={{ background: hasPhoto ? undefined : `${color}18`, border: `1.5px solid ${color}40` }}>
-                      {hasPhoto
-                        ? <img src={`/players/${player.toLowerCase()}.png`} alt={player} className="w-full h-full object-cover" />
-                        : <span style={{ color, fontSize: '0.6rem', fontFamily: "'Bebas Neue', sans-serif", letterSpacing: '0.04em' }}>{player.charAt(0).toUpperCase()}</span>
-                      }
-                    </div>
+                    <PlayerAvatar player={player} />
                     <div className="min-w-0">
                       <div className="flex items-baseline gap-1.5 flex-wrap">
                         <span className="text-sm font-semibold text-slate-200 truncate">{ATHLETE_NAMES[player] ?? player}</span>
@@ -488,8 +482,6 @@ export default function StatsPage() {
           <div className="space-y-1.5">
             {sortedStats.filter(({ totalIp, totalRunsAllowed }) => totalIp > 0 || totalRunsAllowed > 0).map(({ player, stats, totalIp, totalRunsAllowed }) => {
               const isInactiveThisWeek = selectedWeek !== 'all' && (weeklyInactive.get(selectedWeek as number)?.has(player) ?? false)
-              const color = PLAYER_HUES[player] || '#22c55e'
-              const hasPhoto = PLAYERS_WITH_PHOTOS.has(player)
               const k = isInactiveThisWeek ? null : (selectedWeek === 'all'
                 ? (mode === 'total' ? stats['strikeouts'].total : stats['strikeouts'].perGame)
                 : stats['strikeouts'].total)
@@ -505,13 +497,7 @@ export default function StatsPage() {
                     opacity: isInactiveThisWeek ? 0.55 : 1,
                   }}>
                   <div className="flex items-center gap-2 min-w-0">
-                    <div className="w-7 h-7 rounded-full shrink-0 overflow-hidden flex items-center justify-center"
-                      style={{ background: hasPhoto ? undefined : `${color}18`, border: `1.5px solid ${color}40` }}>
-                      {hasPhoto
-                        ? <img src={`/players/${player.toLowerCase()}.png`} alt={player} className="w-full h-full object-cover" />
-                        : <span style={{ color, fontSize: '0.6rem', fontFamily: "'Bebas Neue', sans-serif", letterSpacing: '0.04em' }}>{player.charAt(0).toUpperCase()}</span>
-                      }
-                    </div>
+                    <PlayerAvatar player={player} />
                     <span className="text-sm font-semibold text-slate-200 truncate">{ATHLETE_NAMES[player] ?? player}</span>
                   </div>
                   {/* IP */}
@@ -579,22 +565,12 @@ export default function StatsPage() {
                         {winners.length > 0 ? (
                           <>
                             <div className="flex flex-wrap gap-1 mb-1.5">
-                              {winners.map(w => {
-                                const color = PLAYER_HUES[w] || '#22c55e'
-                                const hasPhoto = PLAYERS_WITH_PHOTOS.has(w)
-                                return (
-                                  <div key={w} className="flex items-center gap-1">
-                                    <div className="w-5 h-5 rounded-full overflow-hidden shrink-0 flex items-center justify-center"
-                                      style={{ background: hasPhoto ? undefined : `${color}20`, border: `1.5px solid ${color}50` }}>
-                                      {hasPhoto
-                                        ? <img src={`/players/${w.toLowerCase()}.png`} alt={w} className="w-full h-full object-cover object-top" />
-                                        : <span style={{ color, fontSize: '0.5rem', fontFamily: "'Bebas Neue', sans-serif" }}>{w.charAt(0).toUpperCase()}</span>
-                                      }
-                                    </div>
-                                    <span className="text-xs font-semibold capitalize" style={{ color: PLAYER_HUES[w] || '#22c55e' }}>{w}</span>
-                                  </div>
-                                )
-                              })}
+                              {winners.map(w => (
+                                <div key={w} className="flex items-center gap-1">
+                                  <PlayerAvatar player={w} size={20} objectTop />
+                                  <span className="text-xs font-semibold capitalize" style={{ color: PLAYER_HUES[w] || '#22c55e' }}>{w}</span>
+                                </div>
+                              ))}
                             </div>
                             {blurb && <p className="text-xs leading-snug" style={{ color: '#64748b' }}>{blurb}</p>}
                           </>

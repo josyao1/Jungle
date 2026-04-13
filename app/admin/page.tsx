@@ -418,6 +418,16 @@ export default function AdminPage() {
 
   const currentGame = games.find(g => g.game_number === selectedGame)
 
+  // Helpers for the results table footer totals
+  const activePlayers = getPlayersForGame(selectedGame).filter(p => !inactivePlayers.has(p))
+  const sumColumn = (stat: string) =>
+    activePlayers.reduce((sum, p) => sum + (parseInt(results[p]?.[stat] || '0') || 0), 0)
+  const sumIpThirds = activePlayers.reduce((sum, p) => {
+    const v = results[p]?.['ip'] || ''
+    const t = v ? ipToThirds(v) : NaN
+    return sum + (isNaN(t) ? 0 : t)
+  }, 0)
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -589,47 +599,23 @@ export default function AdminPage() {
                     <tr style={{ borderTop: '2px solid rgba(255,255,255,0.08)' }}>
                       <td className="py-2 px-2 text-xs font-bold uppercase tracking-widest" style={{ color: '#475569' }}>Total</td>
                       {STATS.map(stat => {
-                        const total = getPlayersForGame(selectedGame)
-                          .filter(p => !inactivePlayers.has(p))
-                          .reduce((sum, p) => sum + (parseInt(results[p]?.[stat] || '0') || 0), 0)
+                        const t = sumColumn(stat)
                         return (
                           <td key={stat} className="text-center py-2 text-sm font-bold" style={{ color: '#e2e8f0' }}>
-                            {total > 0 ? total : <span style={{ color: '#334155' }}>0</span>}
+                            {t > 0 ? t : <span style={{ color: '#334155' }}>0</span>}
                           </td>
                         )
                       })}
-                      <td className="text-center py-2 text-sm font-bold" style={{ color: 'var(--amber-warm)' }}>
-                        {(() => {
-                          const t = getPlayersForGame(selectedGame).filter(p => !inactivePlayers.has(p))
-                            .reduce((sum, p) => sum + (parseInt(results[p]?.['ab'] || '0') || 0), 0)
-                          return t > 0 ? t : <span style={{ color: '#334155' }}>0</span>
-                        })()}
-                      </td>
-                      <td className="text-center py-2 text-sm font-bold" style={{ color: 'rgba(129,140,248,0.9)' }}>
-                        {(() => {
-                          const thirds = getPlayersForGame(selectedGame).filter(p => !inactivePlayers.has(p))
-                            .reduce((sum, p) => {
-                              const v = results[p]?.['ip'] || ''
-                              const t = v ? ipToThirds(v) : NaN
-                              return sum + (isNaN(t) ? 0 : t)
-                            }, 0)
-                          return thirds > 0 ? thirdsToIpDisplay(thirds) : <span style={{ color: '#334155' }}>0</span>
-                        })()}
-                      </td>
-                      <td className="text-center py-2 text-sm font-bold" style={{ color: 'rgba(129,140,248,0.9)' }}>
-                        {(() => {
-                          const t = getPlayersForGame(selectedGame).filter(p => !inactivePlayers.has(p))
-                            .reduce((sum, p) => sum + (parseInt(results[p]?.['runs_allowed'] || '0') || 0), 0)
-                          return t > 0 ? t : <span style={{ color: '#334155' }}>0</span>
-                        })()}
-                      </td>
-                      <td className="text-center py-2 text-sm font-bold" style={{ color: 'rgba(234,179,8,0.9)' }}>
-                        {(() => {
-                          const t = getPlayersForGame(selectedGame).filter(p => !inactivePlayers.has(p))
-                            .reduce((sum, p) => sum + (parseInt(results[p]?.['homeruns'] || '0') || 0), 0)
-                          return t > 0 ? t : <span style={{ color: '#334155' }}>0</span>
-                        })()}
-                      </td>
+                      {([
+                        { val: sumColumn('ab'),           color: 'var(--amber-warm)' },
+                        { val: sumIpThirds,               color: 'rgba(129,140,248,0.9)', display: thirdsToIpDisplay(sumIpThirds) },
+                        { val: sumColumn('runs_allowed'),  color: 'rgba(129,140,248,0.9)' },
+                        { val: sumColumn('homeruns'),      color: 'rgba(234,179,8,0.9)' },
+                      ] as { val: number; color: string; display?: string }[]).map(({ val, color, display }, i) => (
+                        <td key={i} className="text-center py-2 text-sm font-bold" style={{ color }}>
+                          {val > 0 ? (display ?? val) : <span style={{ color: '#334155' }}>0</span>}
+                        </td>
+                      ))}
                     </tr>
                   </tfoot>
                 </table>

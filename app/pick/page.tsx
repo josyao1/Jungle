@@ -9,9 +9,11 @@ export const dynamic = 'force-dynamic'
  */
 
 import { useState, useEffect, useCallback } from 'react'
-import { STATS, STAT_LABELS, GAMES, PROP_BETS, PROP_BET_LABELS, getGamePhase, getPlayersForGame, sortWithInactiveAtBottom, Player, Stat, PLAYER_HUES, PLAYERS_WITH_PHOTOS } from '@/lib/constants'
+import { STATS, STAT_LABELS, GAMES, PROP_BETS, PROP_BET_LABELS, getGamePhase, getPlayersForGame, sortWithInactiveAtBottom, Player, Stat, PLAYER_HUES } from '@/lib/constants'
 import PlayerSelect from '@/components/PlayerSelect'
+import PlayerAvatar from '@/components/PlayerAvatar'
 import { supabase, Line, Pick, getInactivePlayersForGame } from '@/lib/supabase'
+import { findCurrentGame, getOrCreateGameRecord } from '@/lib/game'
 import { calculateAveragedLine } from '@/lib/utils'
 
 const STAT_SHORT: Record<string, string> = {
@@ -44,91 +46,55 @@ export default function PickPage() {
     }
     setPlayer(savedPlayer)
 
-    const now = new Date()
-    const currentGame = GAMES.find(g => {
-      const gameEnd = new Date(g.date.getTime() + 3 * 60 * 60 * 1000)
-      return now < gameEnd
-    }) || GAMES[GAMES.length - 1]
-
+    const currentGame = findCurrentGame()
     const gameToLoad = weekNum ? GAMES.find(g => g.number === weekNum) || currentGame : currentGame
     if (!weekNum) setSelectedWeek(currentGame.number)
 
     const currentPhase = getGamePhase(gameToLoad)
     setPhase(currentPhase)
 
-    let { data: games } = await supabase
-      .from('jungle_games')
-      .select('id')
-      .eq('game_number', gameToLoad.number)
-      .single()
+    const gameRecord = await getOrCreateGameRecord(gameToLoad.number)
+    if (!gameRecord) { setLoading(false); return }
+    setGameId(gameRecord.id)
 
-    if (!games) {
-      const { data: newGame } = await supabase
-        .from('jungle_games')
-        .insert({
-          game_number: gameToLoad.number,
-          game_date: gameToLoad.date.toISOString(),
-          lines_lock_time: gameToLoad.lockTime.toISOString(),
-          picks_lock_time: gameToLoad.lockTime.toISOString(),
-          status: 'upcoming',
-          forfeited: false,
-        })
-        .select('id')
-        .single()
-
-      if (!newGame) { setLoading(false); return }
-      games = newGame
-    }
-    setGameId(games.id)
-
-    const inactive = await getInactivePlayersForGame(games.id)
+    const inactive = await getInactivePlayersForGame(gameRecord.id)
     setInactivePlayers(inactive)
     const active = getPlayersForGame(gameToLoad.number).filter(p => !inactive.has(p))
 
-    await calculateAndSaveLines(games.id, active)
+    await calculateAndSaveLines(gameRecord.id, active)
     const { data: liveLines } = await supabase
       .from('jungle_lines')
       .select('*')
-      .eq('game_id', games.id)
+      .eq('game_id', gameRecord.id)
     setLines(liveLines || [])
 
     const { data: gameResults } = await supabase
       .from('jungle_results')
       .select('*')
-      .eq('game_id', games.id)
+      .eq('game_id', gameRecord.id)
     setResults(gameResults || [])
 
     const { data: userPreds } = await supabase
       .from('jungle_line_predictions')
       .select('*')
-      .eq('game_id', games.id)
+      .eq('game_id', gameRecord.id)
       .eq('submitter', savedPlayer)
     setUserPredictions(userPreds || [])
 
-    // Load prop picks
-    const { data: existingPropPicks } = await supabase
-      .from('jungle_prop_picks')
-      .select('*')
-      .eq('game_id', games.id)
-      .eq('picker', savedPlayer)
+    // Load prop picks and results in parallel
+    const [{ data: existingPropPicks }, { data: gamePropResults }, { data: existingPicks }] = await Promise.all([
+      supabase.from('jungle_prop_picks').select('*').eq('game_id', gameRecord.id).eq('picker', savedPlayer),
+      supabase.from('jungle_prop_results').select('*').eq('game_id', gameRecord.id),
+      supabase.from('jungle_picks').select('*').eq('game_id', gameRecord.id).eq('picker', savedPlayer),
+    ])
+
     const propPicksMap: Record<string, string> = {}
     existingPropPicks?.forEach((p: any) => { propPicksMap[p.prop_type] = p.player_picked })
     setPropPicks(propPicksMap)
 
-    // Load prop results for display
-    const { data: gamePropResults } = await supabase
-      .from('jungle_prop_results')
-      .select('*')
-      .eq('game_id', games.id)
     const propResultsMap: Record<string, string> = {}
     gamePropResults?.forEach((pr: any) => { propResultsMap[pr.prop_type] = pr.winner })
     setPropResults(propResultsMap)
-
-    const { data: existingPicks } = await supabase
-      .from('jungle_picks')
-      .select('*')
-      .eq('game_id', games.id)
-      .eq('picker', savedPlayer)
 
     const gamePlayers = getPlayersForGame(gameToLoad.number)
     const picksMap: Record<string, Record<string, boolean>> = {}
@@ -317,11 +283,7 @@ export default function PickPage() {
   }
 
   const isLocked = phase === 'locked'
-  const now = new Date()
-  const currentGameNum = (GAMES.find(g => {
-    const gameEnd = new Date(g.date.getTime() + 3 * 60 * 60 * 1000)
-    return now < gameEnd
-  }) || GAMES[GAMES.length - 1]).number
+  const currentGameNum = findCurrentGame().number
 
   return (
     <div className="space-y-6">
@@ -488,7 +450,6 @@ export default function PickPage() {
           {sortWithInactiveAtBottom(getPlayersForGame(selectedWeek), inactivePlayers).map(targetPlayer => {
             const isInactive = inactivePlayers.has(targetPlayer)
             const color = PLAYER_HUES[targetPlayer] || '#22c55e'
-            const hasPhoto = PLAYERS_WITH_PHOTOS.has(targetPlayer)
 
             return (
               <div key={targetPlayer}
@@ -502,13 +463,7 @@ export default function PickPage() {
 
                 {/* Player cell */}
                 <div className="flex items-center gap-1.5 min-w-0 pr-1">
-                  <div className="w-7 h-7 rounded-full shrink-0 overflow-hidden flex items-center justify-center"
-                    style={{ background: hasPhoto ? undefined : `${color}18`, border: `1.5px solid ${color}40` }}>
-                    {hasPhoto
-                      ? <img src={`/players/${targetPlayer.toLowerCase()}.png`} alt={targetPlayer} className="w-full h-full object-cover" />
-                      : <span style={{ color, fontSize: '0.65rem', fontFamily: "'Bebas Neue', sans-serif", letterSpacing: '0.04em' }}>{targetPlayer.charAt(0).toUpperCase()}</span>
-                    }
-                  </div>
+                  <PlayerAvatar player={targetPlayer} />
                   <div className="min-w-0">
                     <span className="capitalize text-xs font-semibold text-slate-200 truncate block">{targetPlayer}</span>
                     {isInactive && <span className="badge badge-out">{inactivePlayers.get(targetPlayer) || 'OUT'}</span>}

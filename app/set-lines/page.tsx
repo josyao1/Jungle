@@ -3,9 +3,10 @@
 export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback } from 'react'
-import { STATS, STAT_LABELS, GAMES, getGamePhase, getPlayersForGame, sortWithInactiveAtBottom, Player, Stat } from '@/lib/constants'
+import { STATS, STAT_LABELS, getGamePhase, getPlayersForGame, sortWithInactiveAtBottom, Player, Stat } from '@/lib/constants'
 import PlayerSelect from '@/components/PlayerSelect'
 import { supabase, getInactivePlayersForGame } from '@/lib/supabase'
+import { findCurrentGame, getOrCreateGameRecord } from '@/lib/game'
 
 export default function SetLinesPage() {
   const [player, setPlayer] = useState<Player | null>(null)
@@ -24,52 +25,26 @@ export default function SetLinesPage() {
     if (!savedPlayer) { setLoading(false); return }
     setPlayer(savedPlayer)
 
-    const now = new Date()
-    const currentGame = GAMES.find(g => {
-      const gameEnd = new Date(g.date.getTime() + 3 * 60 * 60 * 1000)
-      return now < gameEnd
-    }) || GAMES[GAMES.length - 1]
-
+    const currentGame = findCurrentGame()
     const currentPhase = getGamePhase(currentGame)
     setPhase(currentPhase)
     setGameNumber(currentGame.number)
 
-    let { data: games } = await supabase
-      .from('jungle_games')
-      .select('id')
-      .eq('game_number', currentGame.number)
-      .single()
-
-    if (!games) {
-      const { data: newGame, error: createError } = await supabase
-        .from('jungle_games')
-        .insert({
-          game_number: currentGame.number,
-          game_date: currentGame.date.toISOString(),
-          lines_lock_time: currentGame.lockTime.toISOString(),
-          picks_lock_time: currentGame.lockTime.toISOString(),
-          status: 'upcoming',
-          forfeited: false,
-        })
-        .select('id')
-        .single()
-
-      if (createError || !newGame) {
-        setError(`Could not find or create game ${currentGame.number}`)
-        setLoading(false)
-        return
-      }
-      games = newGame
+    const gameRecord = await getOrCreateGameRecord(currentGame.number)
+    if (!gameRecord) {
+      setError(`Could not find or create game ${currentGame.number}`)
+      setLoading(false)
+      return
     }
-    setGameId(games.id)
+    setGameId(gameRecord.id)
 
-    const inactive = await getInactivePlayersForGame(games.id)
+    const inactive = await getInactivePlayersForGame(gameRecord.id)
     setInactivePlayers(inactive)
 
     const { data: existingPredictions } = await supabase
       .from('jungle_line_predictions')
       .select('*')
-      .eq('game_id', games.id)
+      .eq('game_id', gameRecord.id)
 
     const gamePlayers = getPlayersForGame(currentGame.number)
     const blank: Record<string, Record<string, string>> = {}
