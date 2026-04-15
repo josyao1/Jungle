@@ -710,6 +710,20 @@ export default function AdminPage() {
             </div>
           </div>
 
+          {/* ── Live Tracker ── */}
+          <div className="glass-card rounded-2xl p-5">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h2 className="font-semibold text-slate-200">Live Tracker</h2>
+                <p className="text-slate-500 text-sm mt-1">Mobile stat entry during the game. Publishes on finalize.</p>
+              </div>
+              <a href="/admin/live-tracker"
+                className="shrink-0 btn-accent px-4 py-2.5 rounded-xl text-sm font-semibold">
+                Open →
+              </a>
+            </div>
+          </div>
+
           <p className="text-slate-600 text-xs text-center">
             Availability toggles save instantly. Refresh other pages to see updates.
           </p>
