@@ -32,25 +32,25 @@ export default function Home() {
         <h2 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-3" style={{ fontFamily: "'JetBrains Mono', monospace" }}>Season Schedule</h2>
         <div className="overflow-x-auto mobile-scroll -mx-4 px-4 md:mx-0 md:px-0">
         <div className="flex md:grid md:grid-cols-4 gap-2 min-w-max md:min-w-0">
-          {GAMES.map(g => {
-            const dateLabel: Record<number, string> = { 1: 'Apr 12', 2: 'Apr 19', 3: 'Apr 26' }
-            const isHome = g.home
+          {GAMES.map((g, i) => {
+            const dateLabel: Record<number, string> = { 1: 'Apr 12', 2: 'Apr 26', 3: 'May 3' }
+            const alt = i % 2 === 0
             return (
               <div key={g.number}
-                className="rounded-xl p-2.5 text-center w-32 flex-shrink-0 md:w-auto md:flex-shrink"
+                className="rounded-xl p-2.5 text-center w-32 flex-shrink-0 md:w-auto md:flex-shrink flex flex-col items-center justify-center"
                 style={{
-                  background: isHome ? 'rgba(168,85,247,0.12)' : 'rgba(248,250,252,0.06)',
-                  border: isHome ? '1px solid rgba(168,85,247,0.35)' : '1px solid rgba(248,250,252,0.18)',
+                  background: alt ? 'rgba(168,85,247,0.12)' : 'rgba(248,250,252,0.06)',
+                  border: alt ? '1px solid rgba(168,85,247,0.35)' : '1px solid rgba(248,250,252,0.18)',
                 }}
               >
-                <div className="text-xs mb-0.5" style={{ color: isHome ? 'rgba(192,132,252,0.7)' : 'rgba(148,163,184,0.6)', fontFamily: "'JetBrains Mono', monospace" }}>
+                <div className="text-xs mb-0.5" style={{ color: alt ? 'rgba(192,132,252,0.7)' : 'rgba(148,163,184,0.6)', fontFamily: "'JetBrains Mono', monospace" }}>
                   {dateLabel[g.number]}
                 </div>
-                <div className="text-xs font-semibold mb-0.5" style={{ color: isHome ? '#c084fc' : '#f1f5f9' }}>{g.label}</div>
-                <div className="text-xs uppercase tracking-widest mb-1" style={{ color: isHome ? 'rgba(192,132,252,0.55)' : 'rgba(241,245,249,0.4)', fontFamily: "'JetBrains Mono', monospace", fontSize: '0.6rem' }}>
-                  {isHome ? 'HOME' : 'AWAY'}
+                <div className="text-xs font-semibold mb-0.5" style={{ color: alt ? '#c084fc' : '#f1f5f9' }}>{g.label}</div>
+                <div className="text-xs uppercase tracking-widest mb-1" style={{ color: alt ? 'rgba(192,132,252,0.55)' : 'rgba(241,245,249,0.4)', fontFamily: "'JetBrains Mono', monospace", fontSize: '0.6rem' }}>
+                  {g.home ? 'HOME' : 'AWAY'}
                 </div>
-                <div className="font-medium leading-tight" style={{ color: isHome ? '#d8b4fe' : '#e2e8f0', fontSize: '0.6rem' }}>
+                <div className="font-medium leading-tight" style={{ color: alt ? '#d8b4fe' : '#e2e8f0', fontSize: '0.6rem' }}>
                   vs. {g.opponent}
                 </div>
                 {'finalScore' in g && g.finalScore && (
@@ -61,12 +61,20 @@ export default function Home() {
                     </span>
                   </div>
                 )}
+                {'rescheduled' in g && g.rescheduled && (
+                  <div className="mt-1.5 rounded-lg px-2 py-0.5"
+                    style={{ background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.4)' }}>
+                    <span style={{ color: '#fbbf24', fontFamily: "'JetBrains Mono', monospace", fontSize: '0.55rem', letterSpacing: '0.08em' }}>
+                      RESCHEDULED
+                    </span>
+                  </div>
+                )}
               </div>
             )
           })}
 
           {/* Playoff Week 1 */}
-          <div className="rounded-xl p-2.5 text-center w-32 flex-shrink-0 md:w-auto md:flex-shrink" style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.3)' }}>
+          <div className="rounded-xl p-2.5 text-center w-32 flex-shrink-0 md:w-auto md:flex-shrink flex flex-col items-center justify-center" style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.3)' }}>
             <div className="text-xs mb-0.5" style={{ color: 'rgba(245,158,11,0.6)', fontFamily: "'JetBrains Mono', monospace" }}>TBD</div>
             <div className="text-xs font-semibold mb-0.5" style={{ color: '#f59e0b' }}>Playoffs</div>
             <div className="text-xs uppercase tracking-widest mb-1" style={{ color: 'rgba(245,158,11,0.5)', fontFamily: "'JetBrains Mono', monospace", fontSize: '0.6rem' }}>Week 1</div>

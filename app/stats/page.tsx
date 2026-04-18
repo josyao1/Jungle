@@ -314,23 +314,26 @@ export default function StatsPage() {
           <div className="flex gap-2 min-w-max md:min-w-0">
             {GAMES.map(g => {
               const isForfeited = forfeitedWeeks.has(g.number)
-              const dateLabel: Record<number, string> = { 1: 'Apr 12', 2: 'Apr 19', 3: 'Apr 26' }
+              const dateLabel: Record<number, string> = { 1: 'Apr 12', 2: 'Apr 26', 3: 'May 3' }
               const isHome = g.home
               const score = 'finalScore' in g ? g.finalScore : undefined
               return (
                 <div key={g.number} className="flex items-center gap-2 rounded-xl px-3 py-2"
                   style={{
-                    background: isHome ? 'rgba(168,85,247,0.08)' : 'rgba(248,250,252,0.04)',
-                    border: isForfeited ? '1px solid rgba(239,68,68,0.3)' : isHome ? '1px solid rgba(168,85,247,0.25)' : '1px solid rgba(255,255,255,0.07)',
+                    background: isHome ? 'rgba(168,85,247,0.1)' : 'rgba(248,250,252,0.06)',
+                    border: isForfeited ? '1px solid rgba(239,68,68,0.4)' : isHome ? '1px solid rgba(168,85,247,0.3)' : '1px solid rgba(255,255,255,0.14)',
                   }}>
-                  <span className="text-xs shrink-0" style={{ color: '#475569', fontFamily: "'JetBrains Mono', monospace" }}>{dateLabel[g.number]}</span>
-                  <span className="text-xs font-semibold" style={{ color: isHome ? '#c084fc' : '#94a3b8' }}>{g.label}</span>
+                  <span className="text-xs shrink-0" style={{ color: '#64748b', fontFamily: "'JetBrains Mono', monospace" }}>{dateLabel[g.number]}</span>
+                  <span className="text-xs font-semibold" style={{ color: isHome ? '#c084fc' : '#e2e8f0' }}>{g.label}</span>
                   {isForfeited
                     ? <span className="text-xs font-bold text-red-400">FORF</span>
                     : score
                       ? <span className="text-xs font-bold shrink-0" style={{ color: '#4ade80', fontFamily: "'Bebas Neue', sans-serif", letterSpacing: '0.06em' }}>W {score}</span>
-                      : <span className="text-xs" style={{ color: '#1e293b' }}>vs. {g.opponent}</span>
+                      : <span className="text-xs" style={{ color: '#64748b' }}>vs. {g.opponent}</span>
                   }
+                  {'rescheduled' in g && g.rescheduled && (
+                    <span className="text-xs font-bold shrink-0" style={{ color: '#fbbf24', fontFamily: "'JetBrains Mono', monospace", fontSize: '0.55rem', letterSpacing: '0.06em' }}>RESCHD</span>
+                  )}
                 </div>
               )
             })}

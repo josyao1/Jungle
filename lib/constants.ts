@@ -18,7 +18,7 @@ export const PLAYER_HUES: Record<string, string> = {
   joshua: '#22c55e', ronit: '#f59e0b', aarnav: '#06b6d4', evan: '#a855f7',
   andrew: '#f97316', rohit: '#ec4899', teja: '#10b981', aiyan: '#3b82f6',
   salil: '#eab308', Jay: '#8b5cf6', Tommy: '#84cc16', Neo: '#d946ef',
-  Alan: '#64748b', Reis: '#f43f5e',
+  Alan: '#64748b', Reis: '#f43f5e', Rudy: '#0ea5e9',
 }
 
 // Players with a photo at /public/players/{name.toLowerCase()}.png
@@ -28,20 +28,22 @@ export const PLAYERS_WITH_PHOTOS = new Set<string>([
 ])
 
 // Bettors — the core group who can place picks (does NOT include week-1-only guests)
-export const BETTORS = ['joshua', 'ronit', 'aarnav', 'evan', 'andrew', 'rohit', 'teja', 'aiyan', 'salil', 'Jay', 'Tommy', 'Neo'] as const
+export const BETTORS = ['joshua', 'ronit', 'aarnav', 'evan', 'andrew', 'rohit', 'teja', 'aiyan', 'salil', 'Jay', 'Tommy', 'Neo', 'Rudy'] as const
 export type Bettor = typeof BETTORS[number]
 
-// All players including week-1-only guests (Alan, Reis)
-export const PLAYERS = ['joshua', 'ronit', 'aarnav', 'evan', 'andrew', 'rohit', 'teja', 'aiyan', 'salil', 'Jay', 'Tommy', 'Neo', 'Alan', 'Reis'] as const
+// All players including week-1-only guests (Alan, Reis) and week-2+ players (Rudy)
+export const PLAYERS = ['joshua', 'ronit', 'aarnav', 'evan', 'andrew', 'rohit', 'teja', 'aiyan', 'salil', 'Jay', 'Tommy', 'Neo', 'Rudy', 'Alan', 'Reis'] as const
 export type Player = typeof PLAYERS[number]
 
 // Players who only appear in game 1 (no betting profile, stats week 1 only)
 export const WEEK1_ONLY_PLAYERS = new Set<string>(['Alan', 'Reis'])
 
+// Players who join starting game 2 (not in game 1)
+export const STARTS_WEEK2_PLAYERS = new Set<string>(['Rudy'])
+
 // Returns the players eligible for a given game number.
-// Week-1-only guests (Alan, Reis) are excluded from games 2+.
 export function getPlayersForGame(gameNumber: number): readonly Player[] {
-  if (gameNumber === 1) return PLAYERS
+  if (gameNumber === 1) return PLAYERS.filter(p => !STARTS_WEEK2_PLAYERS.has(p))
   return PLAYERS.filter(p => !WEEK1_ONLY_PLAYERS.has(p))
 }
 
@@ -84,18 +86,19 @@ export const GAMES = [
   {
     number: 2,
     label: 'Week 2',
-    date: new Date('2026-04-19T20:00:00Z'), // Apr 19
-    lockTime: new Date('2026-04-19T20:00:00Z'),
-    opponent: 'Bob Nighten-Gales',
-    home: false,
-  },
-  {
-    number: 3,
-    label: 'Week 3',
     date: new Date('2026-04-26T20:00:00Z'), // Apr 26
     lockTime: new Date('2026-04-26T20:00:00Z'),
     opponent: 'INOBLACKIDOMINICAN',
     home: true,
+  },
+  {
+    number: 3,
+    label: 'Week 3',
+    date: new Date('2026-05-03T20:00:00Z'), // May 3
+    lockTime: new Date('2026-05-03T20:00:00Z'),
+    opponent: 'Bob Nighten-Gales',
+    home: false,
+    rescheduled: true,
   },
 ]
 
