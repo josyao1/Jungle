@@ -302,7 +302,7 @@ export default function LiveTrackerPage() {
     if (!gameId) return
     setSaveStatus('saving')
 
-    const allPlayers = [...new Set([...battingOrder, ...pitcherOrder])]
+    const allPlayers = Array.from(new Set([...battingOrder, ...pitcherOrder]))
     const rows: { game_id: string; player: string; stat: string; value: number }[] = []
     for (const player of allPlayers) {
       const ps = stats[player]
