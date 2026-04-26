@@ -317,6 +317,8 @@ export default function StatsPage() {
               const dateLabel: Record<number, string> = { 1: 'Apr 12', 2: 'Apr 19', 3: 'Apr 26' }
               const isHome = g.home
               const score = 'finalScore' in g ? g.finalScore : undefined
+              const result = 'result' in g ? g.result : undefined
+              const isWin = result === 'W'
               return (
                 <div key={g.number} className="flex items-center gap-2 rounded-xl px-3 py-2"
                   style={{
@@ -328,7 +330,7 @@ export default function StatsPage() {
                   {isForfeited
                     ? <span className="text-xs font-bold text-red-400">FORF</span>
                     : score
-                      ? <span className="text-xs font-bold shrink-0" style={{ color: '#4ade80', fontFamily: "'Bebas Neue', sans-serif", letterSpacing: '0.06em' }}>W {score}</span>
+                      ? <span className="text-xs font-bold shrink-0" style={{ color: isWin ? '#4ade80' : '#f87171', fontFamily: "'Bebas Neue', sans-serif", letterSpacing: '0.06em' }}>{result} {score}</span>
                       : <span className="text-xs" style={{ color: '#1e293b' }}>vs. {g.opponent}</span>
                   }
                 </div>
@@ -419,7 +421,7 @@ export default function StatsPage() {
                     <div className="min-w-0">
                       <div className="flex items-baseline gap-1.5 flex-wrap">
                         <span className="text-sm font-semibold text-slate-200 truncate">{ATHLETE_NAMES[player] ?? player}</span>
-                        {!isInactiveThisWeek && gamesPlayed > 0 && (
+                        {!isInactiveThisWeek && selectedWeek === 'all' && gamesPlayed > 0 && (
                           <span className="text-xs shrink-0" style={{ color: '#334155', fontFamily: "'JetBrains Mono', monospace" }}>({gamesPlayed}GP)</span>
                         )}
                         {!isInactiveThisWeek && totalHomeruns > 0 && (

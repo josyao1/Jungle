@@ -55,9 +55,12 @@ export default function Home() {
                 </div>
                 {'finalScore' in g && g.finalScore && (
                   <div className="mt-1.5 rounded-lg px-2 py-0.5 inline-block"
-                    style={{ background: 'rgba(34,197,94,0.18)', border: '1px solid rgba(34,197,94,0.45)' }}>
-                    <span style={{ color: '#4ade80', fontFamily: "'Bebas Neue', sans-serif", fontSize: '0.85rem', letterSpacing: '0.08em' }}>
-                      W {g.finalScore}
+                    style={{
+                      background: ('result' in g && g.result === 'L') ? 'rgba(239,68,68,0.18)' : 'rgba(34,197,94,0.18)',
+                      border: ('result' in g && g.result === 'L') ? '1px solid rgba(239,68,68,0.45)' : '1px solid rgba(34,197,94,0.45)',
+                    }}>
+                    <span style={{ color: ('result' in g && g.result === 'L') ? '#f87171' : '#4ade80', fontFamily: "'Bebas Neue', sans-serif", fontSize: '0.85rem', letterSpacing: '0.08em' }}>
+                      {('result' in g ? g.result : 'W')} {g.finalScore}
                     </span>
                   </div>
                 )}

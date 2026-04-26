@@ -85,6 +85,7 @@ export const GAMES = [
     opponent: 'UV Catastrophe',
     home: true,
     finalScore: '13-3',
+    result: 'W' as const,
   },
   {
     number: 2,
@@ -93,6 +94,8 @@ export const GAMES = [
     lockTime: new Date('2026-04-26T20:00:00Z'),
     opponent: 'Bob Nighten-Gales',
     home: false,
+    finalScore: '7-1',
+    result: 'L' as const,
   },
   {
     number: 3,
