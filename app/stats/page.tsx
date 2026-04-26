@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic'
  */
 
 import { useState, useEffect, useCallback } from 'react'
-import { PLAYERS, STATS, STAT_LABELS, GAMES, getPlayersForGame, WEEK1_ONLY_PLAYERS, Stat, PLAYER_HUES, PLAYERS_WITH_PHOTOS, PROP_BET_LABELS, PROP_BETS } from '@/lib/constants'
+import { PLAYERS, STATS, STAT_LABELS, GAMES, getPlayersForGame, WEEK1_ONLY_PLAYERS, WEEK2_PLUS_PLAYERS, Stat, PLAYER_HUES, PLAYERS_WITH_PHOTOS, PROP_BET_LABELS, PROP_BETS } from '@/lib/constants'
 import PlayerAvatar from '@/components/PlayerAvatar'
 import { supabase } from '@/lib/supabase'
 
@@ -277,9 +277,9 @@ export default function StatsPage() {
     const bOut = currentInactive.has(b.player) ? 2 : 0
     if (aOut !== bOut) return aOut - bOut
 
-    // Tier 2: week-1-only guests below the regular roster
-    const aGuest = WEEK1_ONLY_PLAYERS.has(a.player) ? 1 : 0
-    const bGuest = WEEK1_ONLY_PLAYERS.has(b.player) ? 1 : 0
+    // Tier 2: guest players (week-1-only or week-2-plus) below the regular roster
+    const aGuest = (WEEK1_ONLY_PLAYERS.has(a.player) || WEEK2_PLUS_PLAYERS.has(a.player)) ? 1 : 0
+    const bGuest = (WEEK1_ONLY_PLAYERS.has(b.player) || WEEK2_PLUS_PLAYERS.has(b.player)) ? 1 : 0
     if (aGuest !== bGuest) return aGuest - bGuest
 
     // Tier 3: primary sort column

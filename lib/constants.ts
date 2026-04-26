@@ -18,7 +18,7 @@ export const PLAYER_HUES: Record<string, string> = {
   joshua: '#22c55e', ronit: '#f59e0b', aarnav: '#06b6d4', evan: '#a855f7',
   andrew: '#f97316', rohit: '#ec4899', teja: '#10b981', aiyan: '#3b82f6',
   salil: '#eab308', Jay: '#8b5cf6', Tommy: '#84cc16', Neo: '#d946ef',
-  Alan: '#64748b', Reis: '#f43f5e',
+  Alan: '#64748b', Reis: '#f43f5e', Rudy: '#0ea5e9',
 }
 
 // Players with a photo at /public/players/{name.toLowerCase()}.png
@@ -32,17 +32,22 @@ export const BETTORS = ['joshua', 'ronit', 'aarnav', 'evan', 'andrew', 'rohit', 
 export type Bettor = typeof BETTORS[number]
 
 // All players including week-1-only guests (Alan, Reis)
-export const PLAYERS = ['joshua', 'ronit', 'aarnav', 'evan', 'andrew', 'rohit', 'teja', 'aiyan', 'salil', 'Jay', 'Tommy', 'Neo', 'Alan', 'Reis'] as const
+export const PLAYERS = ['joshua', 'ronit', 'aarnav', 'evan', 'andrew', 'rohit', 'teja', 'aiyan', 'salil', 'Jay', 'Tommy', 'Neo', 'Alan', 'Reis', 'Rudy'] as const
 export type Player = typeof PLAYERS[number]
 
 // Players who only appear in game 1 (no betting profile, stats week 1 only)
 export const WEEK1_ONLY_PLAYERS = new Set<string>(['Alan', 'Reis'])
 
+// Players who join from week 2 onwards — not in game 1
+export const WEEK2_PLUS_PLAYERS = new Set<string>(['Rudy'])
+
 // Returns the players eligible for a given game number.
-// Week-1-only guests (Alan, Reis) are excluded from games 2+.
 export function getPlayersForGame(gameNumber: number): readonly Player[] {
-  if (gameNumber === 1) return PLAYERS
-  return PLAYERS.filter(p => !WEEK1_ONLY_PLAYERS.has(p))
+  return PLAYERS.filter(p => {
+    if (WEEK1_ONLY_PLAYERS.has(p)) return gameNumber === 1
+    if (WEEK2_PLUS_PLAYERS.has(p)) return gameNumber >= 2
+    return true
+  })
 }
 
 // Bettable hitting stats (drives pick/set-lines flow)
