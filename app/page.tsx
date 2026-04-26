@@ -33,8 +33,8 @@ export default function Home() {
         <div className="overflow-x-auto mobile-scroll -mx-4 px-4 md:mx-0 md:px-0">
         <div className="flex md:grid md:grid-cols-4 gap-2 min-w-max md:min-w-0">
           {GAMES.map(g => {
-            const dateLabel: Record<number, string> = { 1: 'Apr 12', 2: 'Apr 19', 3: 'Apr 26' }
             const isHome = g.home
+            const dateLabel = g.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/Chicago' })
             return (
               <div key={g.number}
                 className="rounded-xl p-2.5 text-center w-32 flex-shrink-0 md:w-auto md:flex-shrink"
@@ -44,7 +44,7 @@ export default function Home() {
                 }}
               >
                 <div className="text-xs mb-0.5" style={{ color: isHome ? 'rgba(192,132,252,0.7)' : 'rgba(148,163,184,0.6)', fontFamily: "'JetBrains Mono', monospace" }}>
-                  {dateLabel[g.number]}
+                  {dateLabel}
                 </div>
                 <div className="text-xs font-semibold mb-0.5" style={{ color: isHome ? '#c084fc' : '#f1f5f9' }}>{g.label}</div>
                 <div className="text-xs uppercase tracking-widest mb-1" style={{ color: isHome ? 'rgba(192,132,252,0.55)' : 'rgba(241,245,249,0.4)', fontFamily: "'JetBrains Mono', monospace", fontSize: '0.6rem' }}>
