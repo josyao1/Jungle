@@ -86,16 +86,16 @@ export const GAMES = [
     label: 'Week 2',
     date: new Date('2026-04-26T20:00:00Z'), // Apr 26
     lockTime: new Date('2026-04-26T20:00:00Z'),
-    opponent: 'INOBLACKIDOMINICAN',
-    home: true,
+    opponent: 'Bob Nighten-Gales',
+    home: false,
   },
   {
     number: 3,
     label: 'Week 3',
     date: new Date('2026-05-03T20:00:00Z'), // May 3
     lockTime: new Date('2026-05-03T20:00:00Z'),
-    opponent: 'Bob Nighten-Gales',
-    home: false,
+    opponent: 'INOBLACKIDOMINICAN',
+    home: true,
   },
 ]
 
