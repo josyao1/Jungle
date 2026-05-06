@@ -314,7 +314,7 @@ export default function StatsPage() {
           <div className="flex gap-2 min-w-max md:min-w-0">
             {GAMES.map(g => {
               const isForfeited = forfeitedWeeks.has(g.number)
-              const dateLabel: Record<number, string> = { 1: 'Apr 12', 2: 'Apr 19', 3: 'Apr 26' }
+              const dateLabel = g.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/Chicago' })
               const isHome = g.home
               const score = 'finalScore' in g ? g.finalScore : undefined
               const result = 'result' in g ? g.result : undefined
@@ -325,22 +325,17 @@ export default function StatsPage() {
                     background: isHome ? 'rgba(168,85,247,0.08)' : 'rgba(248,250,252,0.04)',
                     border: isForfeited ? '1px solid rgba(239,68,68,0.3)' : isHome ? '1px solid rgba(168,85,247,0.25)' : '1px solid rgba(255,255,255,0.07)',
                   }}>
-                  <span className="text-xs shrink-0" style={{ color: '#475569', fontFamily: "'JetBrains Mono', monospace" }}>{dateLabel[g.number]}</span>
+                  <span className="text-xs shrink-0" style={{ color: '#475569', fontFamily: "'JetBrains Mono', monospace" }}>{dateLabel}</span>
                   <span className="text-xs font-semibold" style={{ color: isHome ? '#c084fc' : '#94a3b8' }}>{g.label}</span>
                   {isForfeited
                     ? <span className="text-xs font-bold text-red-400">FORF</span>
                     : score
                       ? <span className="text-xs font-bold shrink-0" style={{ color: isWin ? '#4ade80' : '#f87171', fontFamily: "'Bebas Neue', sans-serif", letterSpacing: '0.06em' }}>{result} {score}</span>
-                      : <span className="text-xs" style={{ color: '#1e293b' }}>vs. {g.opponent}</span>
+                      : <span className="text-xs" style={{ color: '#475569' }}>vs. {g.opponent}</span>
                   }
                 </div>
               )
             })}
-            <div className="flex items-center gap-2 rounded-xl px-3 py-2"
-              style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.2)' }}>
-              <span className="text-xs shrink-0" style={{ color: 'rgba(245,158,11,0.5)', fontFamily: "'JetBrains Mono', monospace" }}>TBD</span>
-              <span className="text-xs font-semibold" style={{ color: '#f59e0b' }}>Playoffs</span>
-            </div>
           </div>
         </div>
       </div>

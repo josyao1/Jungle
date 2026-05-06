@@ -5,7 +5,7 @@
  *  - BETTORS: 12 core players who can place picks (everyone bets on everyone)
  *  - PLAYERS: BETTORS + week-1-only guests (Alan, Reis)
  *  - STATS: Softball stat categories tracked per game
- *  - GAMES: 3-week season schedule (Sundays at 3pm CDT starting Apr 12, 2026)
+ *  - GAMES: Regular season (Weeks 1–2) + playoffs schedule
  *  - Helper functions for game phase and current game detection
  *
  * Player availability (injuries/absences) is managed dynamically in the
@@ -75,7 +75,7 @@ export const PROP_BET_LABELS: Record<PropBet, string> = {
   longest_hit: '💥 Longest Hit',
 }
 
-// Game dates - Sundays at 3pm CDT (UTC-5 = 20:00 UTC) starting April 12
+// Game dates - CDT = UTC-5, so 3pm CDT = 20:00 UTC, 4pm CDT = 21:00 UTC
 export const GAMES = [
   {
     number: 1,
@@ -90,7 +90,7 @@ export const GAMES = [
   {
     number: 2,
     label: 'Week 2',
-    date: new Date('2026-04-26T20:00:00Z'), // Apr 26
+    date: new Date('2026-04-26T20:00:00Z'), // Apr 26 at 3pm CDT
     lockTime: new Date('2026-04-26T20:00:00Z'),
     opponent: 'Bob Nighten-Gales',
     home: false,
@@ -99,10 +99,10 @@ export const GAMES = [
   },
   {
     number: 3,
-    label: 'Week 3',
-    date: new Date('2026-05-03T20:00:00Z'), // May 3
-    lockTime: new Date('2026-05-03T20:00:00Z'),
-    opponent: 'INOBLACKIDOMINICAN',
+    label: 'Playoff 1',
+    date: new Date('2026-05-10T21:00:00Z'), // May 10 at 4pm CDT
+    lockTime: new Date('2026-05-10T21:00:00Z'),
+    opponent: 'Evans Scholars',
     home: true,
   },
 ]

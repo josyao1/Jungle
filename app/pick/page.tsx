@@ -61,7 +61,7 @@ export default function PickPage() {
     setInactivePlayers(inactive)
     const active = getPlayersForGame(gameToLoad.number).filter(p => !inactive.has(p))
 
-    await calculateAndSaveLines(gameRecord.id, active)
+    await calculateAndSaveLines(gameRecord.id, active, gameToLoad.number)
     const { data: liveLines } = await supabase
       .from('jungle_lines')
       .select('*')
@@ -136,7 +136,7 @@ export default function PickPage() {
     loadData(weekNum)
   }
 
-  const calculateAndSaveLines = async (gId: string, active: string[]) => {
+  const calculateAndSaveLines = async (gId: string, active: string[], gameNum: number) => {
     const { data: predictions, error: predError } = await supabase
       .from('jungle_line_predictions')
       .select('*')
@@ -146,19 +146,50 @@ export default function PickPage() {
       console.error('[calculateAndSaveLines] fetch failed:', predError.message)
       return
     }
-    if (!predictions || predictions.length === 0) return
 
     const linesToInsert: Array<{ game_id: string; player: string; stat: string; value: number }> = []
-    active.forEach(p => {
-      STATS.forEach(s => {
-        const values = predictions
-          .filter(pred => pred.player === p && pred.stat === s)
-          .map(pred => pred.value)
-        if (values.length > 0) {
-          linesToInsert.push({ game_id: gId, player: p, stat: s, value: calculateAveragedLine(values) })
-        }
+
+    if (predictions && predictions.length > 0) {
+      active.forEach(p => {
+        STATS.forEach(s => {
+          const values = predictions
+            .filter(pred => pred.player === p && pred.stat === s)
+            .map(pred => pred.value)
+          if (values.length > 0) {
+            linesToInsert.push({ game_id: gId, player: p, stat: s, value: calculateAveragedLine(values) })
+          }
+        })
       })
-    })
+    } else {
+      // No predictions submitted — seed lines from season averages across past games
+      const { data: pastGames } = await supabase
+        .from('jungle_games')
+        .select('id')
+        .lt('game_number', gameNum)
+
+      const pastIds = (pastGames || []).map((g: any) => g.id)
+      if (pastIds.length === 0) return
+
+      const { data: pastResults } = await supabase
+        .from('jungle_results')
+        .select('player, stat, value')
+        .in('game_id', pastIds)
+
+      if (!pastResults || pastResults.length === 0) return
+
+      active.forEach(p => {
+        STATS.forEach(s => {
+          const values = (pastResults as Array<{ player: string; stat: string; value: number }>)
+            .filter(r => r.player === p && r.stat === s)
+            .map(r => r.value)
+          if (values.length > 0) {
+            const avg = values.reduce((sum, v) => sum + v, 0) / values.length
+            linesToInsert.push({ game_id: gId, player: p, stat: s, value: Math.round(avg) })
+          }
+        })
+      })
+    }
+
     if (linesToInsert.length === 0) return
 
     const { error: deleteError } = await supabase.from('jungle_lines').delete().eq('game_id', gId)
