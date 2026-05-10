@@ -104,6 +104,17 @@ export const GAMES = [
     lockTime: new Date('2026-05-10T21:00:00Z'),
     opponent: 'Evans Scholars',
     home: true,
+    finalScore: '5-4',
+    result: 'W' as const,
+  },
+  {
+    number: 4,
+    label: 'Playoff 2',
+    date: new Date('2026-05-10T23:00:00Z'), // May 10 at 6pm CDT
+    lockTime: new Date('2026-05-10T23:00:00Z'),
+    opponent: 'TBD',
+    home: false,
+    playoff: true,
   },
 ]
 

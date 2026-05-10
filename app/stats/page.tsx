@@ -130,13 +130,6 @@ export default function StatsPage() {
       activeByGame.set(gameNum, PLAYERS.filter(p => !inactiveMap.has(p)))
     })
 
-    // Track which game numbers have results entered (only these count toward GP)
-    const gamesWithResults = new Set<number>()
-    results.forEach(r => {
-      const gameNum = gameMap.get(r.game_id)
-      if (gameNum) gamesWithResults.add(gameNum)
-    })
-
     // Build highlights map (game_number -> highlight)
     const highlightMap = new Map<number, WeeklyHighlight>()
     highlights?.forEach((h: any) => {
@@ -316,17 +309,18 @@ export default function StatsPage() {
               const isForfeited = forfeitedWeeks.has(g.number)
               const dateLabel = g.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'America/Chicago' })
               const isHome = g.home
+              const isPlayoff = 'playoff' in g && g.playoff
               const score = 'finalScore' in g ? g.finalScore : undefined
               const result = 'result' in g ? g.result : undefined
               const isWin = result === 'W'
               return (
                 <div key={g.number} className="flex items-center gap-2 rounded-xl px-3 py-2"
                   style={{
-                    background: isHome ? 'rgba(168,85,247,0.08)' : 'rgba(248,250,252,0.04)',
-                    border: isForfeited ? '1px solid rgba(239,68,68,0.3)' : isHome ? '1px solid rgba(168,85,247,0.25)' : '1px solid rgba(255,255,255,0.07)',
+                    background: isPlayoff ? 'rgba(245,158,11,0.08)' : isHome ? 'rgba(168,85,247,0.08)' : 'rgba(248,250,252,0.04)',
+                    border: isForfeited ? '1px solid rgba(239,68,68,0.3)' : isPlayoff ? '1px solid rgba(245,158,11,0.25)' : isHome ? '1px solid rgba(168,85,247,0.25)' : '1px solid rgba(255,255,255,0.07)',
                   }}>
                   <span className="text-xs shrink-0" style={{ color: '#475569', fontFamily: "'JetBrains Mono', monospace" }}>{dateLabel}</span>
-                  <span className="text-xs font-semibold" style={{ color: isHome ? '#c084fc' : '#94a3b8' }}>{g.label}</span>
+                  <span className="text-xs font-semibold" style={{ color: isPlayoff ? '#f59e0b' : isHome ? '#c084fc' : '#94a3b8' }}>{g.label}</span>
                   {isForfeited
                     ? <span className="text-xs font-bold text-red-400">FORF</span>
                     : score
@@ -546,7 +540,7 @@ export default function StatsPage() {
             <div key={prop}>
               <p className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: '#64748b', fontFamily: "'JetBrains Mono', monospace" }}>{PROP_BET_LABELS[prop]}</p>
               <div className="overflow-x-auto mobile-scroll -mx-4 px-4 md:mx-0 md:px-0">
-                <div className="flex md:grid md:grid-cols-3 gap-2 md:gap-3 min-w-max md:min-w-0">
+                <div className="flex md:grid md:grid-cols-4 gap-2 md:gap-3 min-w-max md:min-w-0">
                   {GAMES.map(g => {
                     const entry = weeklyPropResults.get(g.number)?.[prop]
                     const winners = entry?.winners || []
@@ -588,7 +582,7 @@ export default function StatsPage() {
       <div className="glass-card rounded-2xl p-4 md:p-6">
         <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide mb-4">Weekly MVP</h2>
         <div className="overflow-x-auto mobile-scroll -mx-4 px-4 md:mx-0 md:px-0">
-          <div className="flex md:grid md:grid-cols-3 gap-3 md:gap-4 min-w-max md:min-w-0">
+          <div className="flex md:grid md:grid-cols-4 gap-3 md:gap-4 min-w-max md:min-w-0">
             {GAMES.map(g => {
               const h = weeklyHighlights.get(g.number)
               const mvp = h?.mvp_player
