@@ -71,7 +71,7 @@ function StatRow({
   )
 }
 
-// ── Drag-reorderable list (works with mouse and touch) ────────────────────────
+// ── Tap-to-reorder list (↑/↓ buttons, reliable on mobile) ─────────────────────────
 function DragList({
   items,
   onChange,
@@ -79,101 +79,48 @@ function DragList({
   items: string[]
   onChange: (next: string[]) => void
 }) {
-  const [dragIndex, setDragIndex] = useState<number | null>(null)
-  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
-  const touchRef = useRef<{ index: number; startY: number } | null>(null)
-  const listRef = useRef<HTMLDivElement>(null)
-
-  const commitDrop = (from: number, to: number) => {
-    if (from === to) return
+  const move = (from: number, to: number) => {
+    if (to < 0 || to >= items.length) return
     const next = [...items]
     const [item] = next.splice(from, 1)
     next.splice(to, 0, item)
     onChange(next)
   }
 
-  // HTML5 drag (desktop)
-  const onDragStart = (i: number) => (e: React.DragEvent) => {
-    e.dataTransfer.effectAllowed = 'move'
-    setDragIndex(i)
-  }
-  const onDragOver = (i: number) => (e: React.DragEvent) => {
-    e.preventDefault()
-    setDragOverIndex(i)
-  }
-  const onDrop = (i: number) => () => {
-    if (dragIndex !== null) commitDrop(dragIndex, i)
-    setDragIndex(null)
-    setDragOverIndex(null)
-  }
-  const onDragEnd = () => {
-    setDragIndex(null)
-    setDragOverIndex(null)
-  }
-
-  // Touch drag (mobile)
-  const onTouchStart = (i: number) => (e: React.TouchEvent) => {
-    touchRef.current = { index: i, startY: e.touches[0].clientY }
-    setDragIndex(i)
-  }
-  const onTouchMove = (e: React.TouchEvent) => {
-    if (!touchRef.current || !listRef.current) return
-    e.preventDefault()
-    const touchY = e.touches[0].clientY
-    const rows = listRef.current.querySelectorAll('[data-row]')
-    let over = items.length - 1
-    for (let idx = 0; idx < rows.length; idx++) {
-      const rect = rows[idx].getBoundingClientRect()
-      if (touchY < rect.top + rect.height / 2) { over = idx; break }
-    }
-    setDragOverIndex(over)
-  }
-  const onTouchEnd = () => {
-    if (touchRef.current !== null && dragOverIndex !== null) {
-      commitDrop(touchRef.current.index, dragOverIndex)
-    }
-    touchRef.current = null
-    setDragIndex(null)
-    setDragOverIndex(null)
-  }
-
   return (
-    <div ref={listRef} className="space-y-1.5 max-h-72 overflow-y-auto" onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
-      {items.map((player, i) => {
-        const isDragging = dragIndex === i
-        const isOver = dragOverIndex === i && dragIndex !== null && dragOverIndex !== dragIndex
-        return (
-          <div
-            key={player}
-            data-row
-            draggable
-            onDragStart={onDragStart(i)}
-            onDragOver={onDragOver(i)}
-            onDrop={onDrop(i)}
-            onDragEnd={onDragEnd}
-            onTouchStart={onTouchStart(i)}
-            className="flex items-center gap-2 rounded-xl px-3 py-2.5 select-none"
-            style={{
-              background: isDragging ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.04)',
-              border: isOver
-                ? '2px solid rgba(34,197,94,0.5)'
-                : '1px solid rgba(255,255,255,0.06)',
-              opacity: isDragging ? 0.4 : 1,
-              cursor: 'grab',
-              touchAction: 'none',
-            }}
-          >
-            <span className="text-slate-600 text-sm" style={{ cursor: 'grab', userSelect: 'none' }}>⠿</span>
-            <span className="text-slate-500 text-xs w-5 text-center tabular-nums">{i + 1}</span>
-            <span className="flex-1 capitalize text-sm font-medium text-slate-200">{player}</span>
+    <div className="space-y-1.5">
+      {items.map((player, i) => (
+        <div
+          key={player}
+          className="flex items-center gap-2 rounded-xl px-3 py-2.5"
+          style={{
+            background: 'rgba(255,255,255,0.04)',
+            border: '1px solid rgba(255,255,255,0.06)',
+          }}
+        >
+          <span className="text-slate-500 text-xs w-5 text-center tabular-nums shrink-0">{i + 1}</span>
+          <span className="flex-1 capitalize text-sm font-medium text-slate-200">{player}</span>
+          <div className="flex gap-1 shrink-0">
+            <button
+              onClick={() => move(i, i - 1)}
+              disabled={i === 0}
+              className="w-10 h-10 rounded-lg text-slate-300 text-lg font-bold disabled:opacity-20 active:scale-95 transition-transform"
+              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)' }}
+            >↑</button>
+            <button
+              onClick={() => move(i, i + 1)}
+              disabled={i === items.length - 1}
+              className="w-10 h-10 rounded-lg text-slate-300 text-lg font-bold disabled:opacity-20 active:scale-95 transition-transform"
+              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)' }}
+            >↓</button>
           </div>
-        )
-      })}
+        </div>
+      ))}
     </div>
   )
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────────
+// ── Main page ─────────────────────────────────────────────────────────────────────────────────
 export default function LiveTrackerPage() {
   const [currentUser, setCurrentUser] = useState<string | null>(null)
   const [selectedGame, setSelectedGame] = useState(() => getCurrentGame().number)
@@ -201,7 +148,7 @@ export default function LiveTrackerPage() {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // ── Load ─────────────────────────────────────────────────────────────────
+  // ── Load ─────────────────────────────────────────────────────────────────────────────────
   useEffect(() => {
     const load = async () => {
       setLoading(true)
@@ -252,7 +199,7 @@ export default function LiveTrackerPage() {
     load()
   }, [selectedGame])
 
-  // ── Autosave ──────────────────────────────────────────────────────────────
+  // ── Autosave ────────────────────────────────────────────────────────────────────────────
   const persistStats = useCallback((newStats: AllStats) => {
     localStorage.setItem(lsKey(selectedGame, 'stats'), JSON.stringify(newStats))
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
@@ -275,7 +222,7 @@ export default function LiveTrackerPage() {
     })
   }, [persistStats])
 
-  // ── Order editing ─────────────────────────────────────────────────────────
+  // ── Order editing ───────────────────────────────────────────────────────────────────────────
   const openEditOrder = (mode: 'batting' | 'pitching') => {
     setEditMode(mode)
     setDraftBatting([...battingOrder])
@@ -297,7 +244,7 @@ export default function LiveTrackerPage() {
     setEditingOrder(false)
   }
 
-  // ── Finalize ──────────────────────────────────────────────────────────────
+  // ── Finalize ──────────────────────────────────────────────────────────────────────────────
   const handleFinalize = async () => {
     if (!gameId) return
     setSaveStatus('saving')
@@ -327,7 +274,7 @@ export default function LiveTrackerPage() {
     alert('Stats published to stat board!')
   }
 
-  // ── Auth guard ────────────────────────────────────────────────────────────
+  // ── Auth guard ────────────────────────────────────────────────────────────────────────────
   if (loading) return <div className="text-center py-12 text-slate-500">Loading...</div>
 
   if (currentUser !== 'joshua') {
@@ -554,7 +501,7 @@ export default function LiveTrackerPage() {
               </button>
             </div>
 
-            <p className="text-xs text-slate-500">Drag ⠿ to reorder. Changes to one don't affect the other.</p>
+            <p className="text-xs text-slate-500">Tap ↑↓ to reorder. Changes to one don't affect the other.</p>
 
             {editMode === 'batting'
               ? <DragList items={draftBatting} onChange={setDraftBatting} />
